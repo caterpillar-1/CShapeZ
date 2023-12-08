@@ -20,6 +20,7 @@ set(PROJECT_SOURCES
         mainwindow.h
         config.h
         gamestate.h gamestate.cpp
+        item.h item.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
