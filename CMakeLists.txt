@@ -21,6 +21,9 @@ set(PROJECT_SOURCES
         config.h
         gamestate.h gamestate.cpp
         item.h item.cpp
+        util.h util.cpp
+        port.h port.cpp
+        device.h device.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include <chrono>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), scene(new QGraphicsScene(this)),
@@ -11,15 +12,18 @@ MainWindow::MainWindow(QWidget *parent)
 
   {
     QAction *newGameAction = fileMenu->addAction("&New Game");
+    newGameAction->setShortcut(Qt::CTRL | Qt::Key_N);
+    QAction *pauseAction = fileMenu->addAction("&Pause/Break");
+    pauseAction->setShortcut(Qt::CTRL | Qt::Key_P);
+    connect(pauseAction, &QAction::triggered, game, &GameState::pause);
     QAction *loadAction = fileMenu->addAction("&Load");
+    loadAction->setShortcut(Qt::CTRL | Qt::Key_L);
     QAction *saveAction = fileMenu->addAction("&Save");
+    saveAction->setShortcut(Qt::CTRL | Qt::Key_S);
     QAction *screenshotAction = fileMenu->addAction("Screenshot");
     QAction *quitAction = fileMenu->addAction("&Quit");
-    connect(quitAction, &QAction::triggered, this, &QMainWindow::close);
-    newGameAction->setShortcut(Qt::CTRL | Qt::Key_N);
-    loadAction->setShortcut(Qt::CTRL | Qt::Key_L);
-    saveAction->setShortcut(Qt::CTRL | Qt::Key_S);
     quitAction->setShortcut(Qt::CTRL | Qt::Key_Q);
+    connect(quitAction, &QAction::triggered, this, &QMainWindow::close);
   }
 
   {

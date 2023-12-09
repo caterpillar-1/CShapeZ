@@ -2,10 +2,11 @@
 #define ITEM_H
 
 #include <QtWidgets>
+#include "util.h"
 
 enum type_t { ROUND, SQUARE };
 enum shape_t { QUARTER = 1, HALF = 2, FULL = 4 };
-enum rotate_t { R0 = 0, R90 = 1, R180 = 2, R270 = 3 };
+
 enum trait_t { BLACK = Qt::darkGray, RED = Qt::red, BLUE = Qt::blue };
 
 class Item : public QObject, public QGraphicsItem
@@ -16,7 +17,6 @@ public:
   Item();
 
 private:
-
 
   // QGraphicsItem interface
 public:
@@ -68,6 +68,35 @@ public:
   QRectF boundingRect() const override;
   QPainterPath shape() const override;
   void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+};
+
+class ItemFactory: public QObject {
+  Q_OBJECT
+public:
+  virtual Item *createItem() = 0;
+  virtual ~ItemFactory();
+};
+
+class MineFactory: public ItemFactory {
+public:
+  MineFactory(type_t type, trait_t trait);
+
+  // ItemFactory interface
+public:
+  Mine *createItem() override;
+private:
+  type_t type;
+  trait_t trait;
+};
+
+class TraitFactory: public ItemFactory {
+public:
+  TraitFactory(trait_t trait);
+
+public:
+  TraitMine *createItem() override;
+private:
+  trait_t trait;
 };
 
 #endif // ITEM_H

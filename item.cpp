@@ -35,7 +35,8 @@ Mine *Mine::getUpperHalf() {
     }
   case QUARTER:
     switch (rotate_) {
-    case R0: case R90:
+    case R0:
+    case R90:
       return new Mine(*this);
     default:
       return nullptr;
@@ -61,7 +62,8 @@ Mine *Mine::getLowerHalf() {
     }
   case QUARTER:
     switch (rotate_) {
-    case R0: case R90:
+    case R0:
+    case R90:
       return nullptr;
     default:
       return new Mine(*this);
@@ -87,7 +89,8 @@ Mine *Mine::getLeftHalf() {
     }
   case QUARTER:
     switch (rotate_) {
-    case R90: case R180:
+    case R90:
+    case R180:
       return new Mine(*this);
     default:
       return nullptr;
@@ -113,7 +116,8 @@ Mine *Mine::getRightHalf() {
     }
   case QUARTER:
     switch (rotate_) {
-    case R0: case R270:
+    case R0:
+    case R270:
       return new Mine(*this);
     default:
       return nullptr;
@@ -123,16 +127,14 @@ Mine *Mine::getRightHalf() {
 }
 
 Mine *Mine::getRotateLeft() {
-  return new Mine(type_, shape_, rotate_t((rotate_+1) % 4), trait_);
+  return new Mine(type_, shape_, rotate_t((rotate_ + 1) % 4), trait_);
 }
 
 Mine *Mine::getRotateRight() {
-  return new Mine(type_, shape_, rotate_t((rotate_+3) % 4), trait_);
+  return new Mine(type_, shape_, rotate_t((rotate_ + 3) % 4), trait_);
 }
 
-void Mine::addTrait(TraitMine &t) {
-  trait_ = t.getTrait();
-}
+void Mine::addTrait(TraitMine &t) { trait_ = t.getTrait(); }
 // format: on
 
 QRectF Mine::boundingRect() const { return QRectF(0, 0, TILE_W, TILE_H); }
@@ -171,11 +173,11 @@ void Mine::paint(QPainter *painter, const QStyleOptionGraphicsItem *,
   painter->restore();
 }
 
+TraitMine::TraitMine(trait_t trait_) : trait_(trait_) {}
+
 trait_t TraitMine::getTrait() { return trait_; }
 
-QRectF TraitMine::boundingRect() const {
-  return QRect(0, 0, TILE_W, TILE_H);
-}
+QRectF TraitMine::boundingRect() const { return QRect(0, 0, TILE_W, TILE_H); }
 
 QPainterPath TraitMine::shape() const {
   QPainterPath path;
@@ -187,6 +189,36 @@ QPainterPath TraitMine::shape() const {
 void TraitMine::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                       QWidget *widget) {
   painter->save();
-  painter->drawEllipse(QPoint(TILE_W/2, TILE_H/2), TILE_W/2, TILE_H/4);
+  QBrush brush((Qt::GlobalColor)trait_);
+  painter->setBrush(brush);
+  painter->drawEllipse(QPoint(TILE_W / 2, TILE_H / 2), TILE_W / 2, TILE_H / 4);
   painter->restore();
+}
+
+
+MineFactory::MineFactory(type_t type, trait_t trait)
+  : type(type), trait(trait)
+{
+
+}
+
+Mine *MineFactory::createItem()
+{
+  return new Mine(type, FULL, R0, trait);
+}
+
+TraitFactory::TraitFactory(trait_t trait)
+  : trait(trait)
+{
+
+}
+
+TraitMine *TraitFactory::createItem()
+{
+  return new TraitMine(trait);
+}
+
+ItemFactory::~ItemFactory()
+{
+
 }
