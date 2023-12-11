@@ -1,58 +1,105 @@
 #ifndef GAMESTATE_H
 #define GAMESTATE_H
 
+#include "device.h"
+#include "item.h"
+#include <map>
 #include <QtWidgets>
-#include "config.h"
-#include "util.h"
 
-class Item;
-class ItemFactory;
-
-class Device;
-class DeviceFactory;
-class Port;
-
-class GameState : public QObject {
+class Selector: public QObject, public QGraphicsItem {
   Q_OBJECT
 public:
-  explicit GameState(QGraphicsScene *scene, QObject *parent = nullptr);
-  void loadMap();
+  explicit Selector(QObject *parent = nullptr);
+  void clear();
+  void move(rotate_t d);
+  QList<QPoint> path();
 
-public slots:
-  void pause();
-  void selectMachine(int id);
-  void shiftSelectedTile(int x, int y);
-
-  // map functions
-  Item *getItem(int x, int y);
-  Device *getDevice(int x, int y);
-  Port *getPort(int x, int y, rotate_t d);
-  Port *getOtherPort(int x, int y, rotate_t d);
-  void setDevice(int x, int y, Device* device);
-  void setPort(int x, int y, rotate_t d, Port *port);
+  // QGraphicsItem interface
+  QRectF boundingRect() const override;
+  QPainterPath shape() const override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
 private:
-  QGraphicsScene *scene;
-  bool stall;
-  int selectedMachine;
-  int selectedTileX, selectedTileY;
-  QGraphicsItem *selectedTile;
-  std::vector<std::vector<ItemFactory *>> groundMap;
-  std::vector<std::vector<Device *>> deviceMap;
-  std::vector<std::vector<std::array<Port *, 4>>> portMap;
+  int x, y;
+  QList<QPoint> path_;
+};
 
-  void handleKeyPressed(QKeyEvent *event);
-  bool eventFilter(QObject *obj, QEvent *event) override;
+struct DeviceDescription {
+  const QPoint p;
+  const rotate_t r;
 
-  // helper functions
-  bool inRange(int x, int y);
-  int timerId;
+  DeviceDescription(QPoint point, rotate_t rotate);
+  DeviceDescription(int x, int y, rotate_t rotate);
+};
 
-signals:
+class GameState : public QObject
+{
+  Q_OBJECT
+public:
+  explicit GameState(QGraphicsScene *scene, QMainWindow *parent = nullptr);
+  void pause(bool paused);
 
   // QObject interface
 protected:
-  void timerEvent(QTimerEvent *event) override;
+  void timerEvent(QTimerEvent *) override;
+  bool eventFilter(QObject *object, QEvent *event) override;
+public slots:
+  void keyPressEvent(QKeyEvent *e);
+  void keyReleaseEvent(QKeyEvent *e);
+
+
+signals:
+  void deviceChangeEvent(device_id_t id);
+
+private:
+  // interfaces for self
+  bool installDevice(QPoint base, rotate_t rotate, Device *device);
+  void removeDevice(Device *device);
+  void removeDevice(int x, int y);
+  void removeDevice(QPoint p);
+  void changeDevice(device_id_t id);
+
+
+private: // helper functions
+  bool inRange(int x, int y);
+  bool inRange(QPoint p);
+  QPoint mapToMap(QPoint p, QPoint base, rotate_t rotate);
+  ItemFactory *&groundMap(int x, int y);
+  ItemFactory *&groundMap(QPoint p);
+  Device *&deviceMap(int x, int y);
+  Device *&deviceMap(QPoint p);
+  Port *&portMap(int x, int y, rotate_t r);
+  Port *&portMap(QPoint p, rotate_t r);
+  Port *otherPort(QPoint p, rotate_t r);
+  void moveSelector(rotate_t d);
+  void shiftSelector(rotate_t d);
+
+private: // states
+  /* GUI elements */
+  // window
+  QMainWindow *window;
+  // scene
+  QGraphicsScene *scene;
+  // selector
+  Selector *selector;
+  QPoint base, offset;
+  rotate_t rotate;
+  // selector FSM
+  bool selectorState;
+
+  /* mapping */
+  std::vector<std::vector<ItemFactory *>> groundMap_;
+  std::vector<std::vector<Device *>> deviceMap_;
+  std::vector<std::vector<std::array<Port *, 4>>> portMap_;
+
+  std::map<Device *, DeviceDescription> devices;
+
+  /* game control */
+  bool pause_;
+  DeviceFactory *deviceFactory;
+
+  /* game stage */
+
 };
 
 #endif // GAMESTATE_H

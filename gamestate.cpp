@@ -1,269 +1,409 @@
 #include "gamestate.h"
-#include "config.h"
-#include "device.h"
-#include "item.h"
 
-GameState::GameState(QGraphicsScene *scene, QObject *parent)
-    : QObject{parent}, scene(scene), stall(true),
-      selectedMachine(0), selectedTileX(0), selectedTileY(0)
-//      selectedMachine(MACHINE_MINER), selectedTileX(0), selectedTileY(0) {
-{
-  loadMap();
+GameState::GameState(QGraphicsScene *scene, QMainWindow *parent)
+    : QObject(parent), window(parent), scene(scene),
+      selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)),
+      rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr) {
+  assert(window);
+  assert(scene);
+  assert(selector);
+
+  scene->addItem(selector);
+  selector->setPos(L / 2, L / 2);
   scene->installEventFilter(this);
-  selectedTile = new QGraphicsRectItem(0, 0, TILE_W, TILE_H);
-  scene->addItem(selectedTile);
 
-  // Testing Item s
-  Mine *item;
-  int i = 0, j = 0;
-  item = new Mine(SQUARE, QUARTER, R0, BLUE);
-  for (int k = 0; k < 16; k ++) {
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    item = dynamic_cast<Mine *>(item)->getRotateLeft();
+  groundMap_.resize(TILES_X);
+  for (auto &col : groundMap_) {
+    col.resize(TILES_Y);
   }
 
-  j ++; i = 0;
-  item = new Mine(ROUND, QUARTER, R0, RED);
-  for (int k = 0; k < 16; k ++) {
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    item = dynamic_cast<Mine *>(item)->getRotateLeft();
+  // debug
+  groundMap_[0][0] = new MineFactory(ROUND, RED);
+
+  deviceMap_.resize(TILES_X);
+  for (auto &col : deviceMap_) {
+    col.resize(TILES_Y);
   }
 
-  j ++; i = 0;
-  item = new Mine(SQUARE, HALF, R0, BLUE);
-  for (int k = 0; k < 16; k ++) {
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    item = dynamic_cast<Mine *>(item)->getRotateLeft();
+  portMap_.resize(TILES_X);
+  for (auto &col : portMap_) {
+    col.resize(TILES_Y, {});
   }
 
-  j ++; i = 0;
-  item = new Mine(ROUND, HALF, R90, RED);
-  for (int k = 0; k < 16; k ++) {
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    item = dynamic_cast<Mine *>(item)->getRotateRight();
-  }
+  // C++ grammer check
+  assert(portMap_[0][0][3] == nullptr);
 
-  j ++; i = 0;
-  item = new Mine(SQUARE, FULL, R0, BLUE);
-  QQueue<Mine *> q;
-  q.push_back(item);
-  int count = 0;
-  while (!q.empty() && count < 32) {
-    item = q.front(); q.pop_front();
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    Mine *subItem = dynamic_cast<Mine *>(item)->getUpperHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getLowerHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getLeftHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getRightHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    count ++;
-  }
-  j ++; i = 0;
-  item = new Mine(ROUND, FULL, R0, RED);
-  q.clear();
-  q.push_back(item);
-  count = 0;
-  while (!q.empty() && count < 32) {
-    item = q.front(); q.pop_front();
-    scene->addItem(item);
-    item->setPos(i * TILE_W, j * TILE_H);
-    i ++;
-    Mine *subItem = dynamic_cast<Mine *>(item)->getUpperHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getLowerHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getLeftHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    subItem = dynamic_cast<Mine *>(item)->getRightHalf();
-    if (subItem != nullptr) q.push_back(subItem);
-    count ++;
-  }
-  j ++; i = 0;
-
-  TraitMine *tmine = new TraitMine(RED);
-  scene->addItem(tmine);
-  tmine->setPos(i * TILE_W, j * TILE_H);
-
-  j ++; i = 0;
-
-  groundMap[i][j] = new MineFactory(SQUARE, RED);
-  DeviceFactory *mF = new MinerFactory(*this);
-  QList<QPoint> l;
-  l.append(QPoint(0, 0));
-  Device * miner = mF->createDevice(QPoint(i ++, j), R0, l);
-  scene->addItem(miner);
-  miner->setPos(i * TILE_W, j * TILE_H);
-
-  miner->install();
-
-  DeviceFactory *bF = new BeltFactory(*this);
-  l.clear();
-
-  for (int k = 0; k < 5; k ++) {
-    l.append(QPoint(k, 0));
-  }
-
-  Device *belt = bF->createDevice(QPoint(i, j), R0, l);
-  scene->addItem(belt);
-  belt->setPos(i * TILE_W, j * TILE_H);
-  belt->install();
-
-  timerId = startTimer(1000/FPS);
+  startTimer(1000 / FPS);
 }
 
-void GameState::loadMap() {
+void GameState::pause(bool paused) { this->pause_ = paused; }
 
-  groundMap.resize(TILES_X);
-  for (auto &col: groundMap) {
-    col.resize(TILES_Y, nullptr);
+bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
+  assert(device);
+  auto blocks = device->blocks();
+  auto portEntries = device->ports();
+
+  // allocating blocks
+  for (auto &block : blocks) {
+    auto p = mapToMap(block, base, rotate);
+    if (!inRange(p)) {
+      return false;
+    }
+
+    auto &d = deviceMap(p);
+    if (d) {
+      removeDevice(d);
+    }
+    d = device;
   }
 
-  portMap.resize(TILES_X);
-  for (auto &col: portMap) {
-    col.resize(TILES_X);
-    for (auto &cell: col) {
-      for (int i = 0; i < 4; i ++) {
-        cell[i] = nullptr;
-      }
+  // connecting ports
+  for (auto &e : portEntries) {
+    Port *port = e.first;
+    const auto &[block, portRotate] = e.second;
+
+    rotate_t r = rotate_t((rotate + portRotate) % 4);
+    auto p = mapToMap(block, base, rotate);
+
+    auto &portSlot = portMap(p, r);
+    assert(portSlot == nullptr);
+    portSlot = port;
+
+    Port *op = otherPort(p, r);
+    if (op) {
+      port->connect(op);
+      op->connect(port);
     }
   }
 
-  deviceMap.resize(TILES_X);
-  for (auto &col: deviceMap) {
-    col.resize(TILES_Y, nullptr);
+  // add to gui
+  scene->addItem(device);
+  device->setPos(base.x()*L + L/2, base.y()*L + L/2);
+  device->setRotation(rotate * 90);
+
+  devices.insert({device, {base, rotate}});
+  return true;
+}
+
+void GameState::removeDevice(Device *device) {
+  assert(devices.find(device) != devices.end());
+  const auto &[base, rotate] = devices.at(device);
+  auto blocks = device->blocks();
+  auto portEntries = device->ports();
+
+  // disconnecting ports
+  for (auto &e : portEntries) {
+    Port *port = e.first;
+    auto &[block, portRotate] = e.second;
+
+    rotate_t r = rotate_t((rotate + portRotate) % 4);
+    auto p = mapToMap(block, base, rotate);
+
+    auto &portSlot = portMap(p, r);
+    assert(portSlot);
+    portSlot = nullptr;
+
+    Port *op = otherPort(p, r);
+    port->disconnect();
+    if (op) {
+      op->disconnect();
+    }
   }
-//  for (int y = 0; y < TILES_Y; y++) {
-//    QList<ItemFactory *> col;
-//    for (int x = 0; x < TILES_X; x++) {
-//      if (3 < x && x < 7 && 2 < y && y < 5) {
-//        col.append(new ItemFactory(ITEM_ROUND));
-//      } else if (8 < x && x < 11 && 6 < y && y < 15) {
-//        col.append(new ItemFactory(ITEM_RECT));
-//      } else {
-//        col.append(new ItemFactory(ITEM_VOID));
-//      }
-//    }
-//    map.append(col);
-//  }
+
+  // freeing blocks
+  for (auto &block : blocks) {
+    auto p = mapToMap(block, base, rotate);
+    assert(inRange(p));
+
+    auto &d = deviceMap(p);
+    d = nullptr;
+  }
+
+  // remove from gui
+  scene->removeItem(device);
+
+  devices.erase(device);
+  delete device;
 }
 
-void GameState::pause() {
-  stall = !stall;
-  qDebug() << ((stall) ? "Paused" : "Resume");
+void GameState::removeDevice(int x, int y) {
+  Device *d = deviceMap(x, y);
+  if (d) {
+    removeDevice(d);
+  }
 }
 
-void GameState::selectMachine(int id) {
-  qDebug() << "Select Machine:" << id;
-  selectedMachine = id;
-}
+void GameState::removeDevice(QPoint p) { removeDevice(p.x(), p.y()); }
 
-void GameState::shiftSelectedTile(int x, int y) {
-  int nx = selectedTileX + x, ny = selectedTileY + y;
-  nx = std::min(std::max(nx, 0), TILES_X - 1);
-  ny = std::min(std::max(ny, 0), TILES_Y - 1);
-  selectedTileX = nx;
-  selectedTileY = ny;
-  selectedTile->setPos(nx * TILE_W, ny * TILE_H);
-}
-
-Item *GameState::getItem(int x, int y)
-{
-  assert(inRange(x, y));
-  ItemFactory *& p = groundMap[x][y];
-  if (p == nullptr) {
-    return nullptr;
+void GameState::changeDevice(device_id_t id) {
+  DeviceFactory *nf = getDeviceFactory(id);
+  if (nf == deviceFactory) {
+    deviceFactory = nullptr;
+    emit deviceChangeEvent(DEV_NONE);
   } else {
-    Item *item = p->createItem();
-    assert(item);
-    scene->addItem(item);
-    return item;
-  }
-}
-
-Device *GameState::getDevice(int x, int y)
-{
-  assert(inRange(x, y));
-  return deviceMap[x][y];
-}
-
-Port *GameState::getPort(int x, int y, rotate_t d)
-{
-  assert(inRange(x, y));
-  return portMap[x][y][d];
-}
-
-Port *GameState::getOtherPort(int x, int y, rotate_t d)
-{
-  assert(inRange(x, y));
-  int nx = x + dx[d], ny = y + dy[d];
-  if (inRange(nx, ny)) {
-    return portMap[nx][ny][rotate_t((d + 2) % 4)];
-  } else {
-    return nullptr;
-  }
-}
-
-void GameState::setDevice(int x, int y, Device *device)
-{
-  assert(inRange(x, y));
-  deviceMap[x][y] = device;
-}
-
-void GameState::setPort(int x, int y, rotate_t d, Port *port)
-{
-  assert(inRange(x, y));
-  portMap[x][y][d] = port;
-}
-
-void GameState::handleKeyPressed(QKeyEvent *event) {
-  switch (event->key()) {
-  case Qt::Key_Left:
-  case Qt::Key_H:
-    shiftSelectedTile(-1, 0);
-    break;
-  case Qt::Key_Right:
-  case Qt::Key_L:
-    shiftSelectedTile(1, 0);
-    break;
-  case Qt::Key_K:
-  case Qt::Key_Up:
-    shiftSelectedTile(0, -1);
-    break;
-  case Qt::Key_J:
-  case Qt::Key_Down:
-    shiftSelectedTile(0, 1);
-    break;
-  }
-}
-
-bool GameState::eventFilter(QObject *obj, QEvent *event) {
-  if (event->type() == QEvent::KeyPress) {
-    handleKeyPressed(dynamic_cast<QKeyEvent *>(event));
-    return true;
-  } else {
-    return QObject::eventFilter(obj, event);
+    deviceFactory = nf;
+    emit deviceChangeEvent(id);
   }
 }
 
 bool GameState::inRange(int x, int y) {
-  return x >= 0 && x < TILES_X && y >= 0 && y < TILES_Y;
+  return 0 <= x && x < TILES_X && 0 <= y && y < TILES_Y;
 }
 
+bool GameState::inRange(QPoint p) { return inRange(p.x(), p.y()); }
 
-void GameState::timerEvent(QTimerEvent *event)
+QPoint GameState::mapToMap(QPoint p, QPoint base, rotate_t rotate) {
+  int bx = base.x(), by = base.y();
+  int x = p.x(), y = p.y();
+  switch (rotate) {
+  case R0:
+    return base + p;
+  case R90:
+    return QPoint(bx + y, by - x);
+  case R180:
+    return base - p;
+  case R270:
+    return QPoint(bx - y, by + x);
+  }
+  assert(false);
+}
+
+ItemFactory *&GameState::groundMap(int x, int y) { return groundMap_[x][y]; }
+
+ItemFactory *&GameState::groundMap(QPoint p) {
+  return groundMap_[p.x()][p.y()];
+}
+
+Device *&GameState::deviceMap(int x, int y) { return deviceMap_[x][y]; }
+
+Device *&GameState::deviceMap(QPoint p) { return deviceMap_[p.x()][p.y()]; }
+
+Port *&GameState::portMap(int x, int y, rotate_t r) {
+  return portMap_[x][y][r];
+}
+
+Port *&GameState::portMap(QPoint p, rotate_t r) {
+  return portMap_[p.x()][p.y()][r];
+}
+
+Port *GameState::otherPort(QPoint p, rotate_t r) {
+  int nx = p.x() + dx[r], ny = p.y() + dy[r];
+  rotate_t nr = rotate_t((r + 2) % 4);
+  if (!inRange(nx, ny)) {
+    return nullptr;
+  }
+
+  return portMap(nx, ny, nr);
+}
+
+void GameState::moveSelector(rotate_t d) {
+  QPoint cur_p = base + offset, np = cur_p + QPoint(dx[d], dy[d]);
+  qDebug() << "moveSelector(" << d <<") from" << cur_p << "to" << np << ".";
+  if (!inRange(np)) {
+    qDebug() << "Out of bound!";
+    return;
+  }
+  offset += QPoint(dx[d], dy[d]);
+  selector->move(rotate_t((d + 4 - rotate) % 4));
+  qDebug() << "Selector position:" << base;
+}
+
+void GameState::shiftSelector(rotate_t d) {
+  assert(inRange(base));
+  int nx = base.x() + dx[d], ny = base.y() + dy[d];
+  qDebug() << "shiftSelector(" << d <<") from" << base << "to" << QPoint(nx, ny);
+  if (!inRange(nx, ny)) {
+    qDebug() << "Out of bound!";
+    return;
+  }
+
+  base = {nx, ny};
+  selector->setPos(nx * L + L / 2, ny * L + L / 2);
+  selector->ensureVisible();
+  qDebug() << "Selector position:" << base;
+}
+
+Selector::Selector(QObject *parent)
+    : QObject(parent), x(0), y(0), path_({QPoint(0, 0)}) {}
+
+void Selector::clear() {
+  x = y = 0;
+  path_ = QList<QPoint>({QPoint(x, y)});
+  prepareGeometryChange();
+  ensureVisible();
+  update();
+}
+
+void Selector::move(rotate_t d) {
+  x = x + dx[d];
+  y = y + dy[d];
+  path_.push_back(QPoint(x, y));
+  prepareGeometryChange();
+  ensureVisible();
+  update();
+}
+
+QList<QPoint> Selector::path() { return path_; }
+
+QRectF Selector::boundingRect() const {
+  int xmin, xmax, ymin, ymax;
+  xmin = xmax = path_.first().x();
+  ymin = ymax = path_.first().y();
+  for (const auto &p : path_) {
+    xmin = std::min(xmin, p.x());
+    xmax = std::max(xmax, p.x());
+    ymin = std::min(ymin, p.y());
+    ymax = std::max(ymax, p.y());
+  }
+//  qDebug() << "Selector boundingRect():" << QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
+//                                                   (ymax-ymin+1)*L);
+  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
+      (ymax-ymin+1)*L);
+}
+
+QPainterPath Selector::shape() const {
+  QPainterPath path;
+  path.setFillRule(Qt::WindingFill);
+
+  for (const auto &p : path_) {
+    int x = p.x(), y = p.y();
+    path.addRect(QRectF(x * L - L / 2, y * L - L / 2, L, L));
+  }
+
+//  qDebug() << "Selector shape(): " << path;
+  return path;
+}
+
+void Selector::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                     QWidget *widget) {
+  qDebug() << "Selector paint(), pos:" << pos();
+  assert(path_.size() >= 1);
+  painter->save();
+  painter->setBrush(QColor(0, 0, 255, 50));
+  for (QPoint p : path_) {
+    int x = p.x(), y = p.y();
+    painter->drawRect(QRectF(x * L - L / 2, y * L - L / 2, L, L));
+  }
+  painter->drawRect(
+      QRectF(path_.back().x() * L - L / 2, path_.back().y() * L - L / 2, L, L));
+  painter->restore();
+}
+
+void GameState::timerEvent(QTimerEvent *) { scene->advance(); }
+
+void GameState::keyPressEvent(QKeyEvent *e) {
+  qDebug() << "KeyPress, status:" << selectorState;
+  using namespace Qt;
+  if (selectorState) {
+    if (e->key() == Key_Space)
+      return;
+    switch (e->key()) {
+    case Key_H:
+    case Key_Left:
+      moveSelector(R180);
+      break;
+    case Key_J:
+    case Key_Down:
+      moveSelector(R270);
+      break;
+    case Key_K:
+    case Key_Up:
+      moveSelector(R90);
+      break;
+    case Key_L:
+    case Key_Right:
+      moveSelector(R0);
+      break;
+    }
+  } else {
+    if (e->key() == Key_Space) {
+      selectorState = true;
+      offset = QPoint(0, 0);
+      return;
+    }
+    switch (e->key()) {
+    case Key_H:
+    case Key_Left:
+      shiftSelector(R180);
+      break;
+    case Key_J:
+    case Key_Down:
+      shiftSelector(R270);
+      break;
+    case Key_K:
+    case Key_Up:
+      shiftSelector(R90);
+      break;
+    case Key_L:
+    case Key_Right:
+      shiftSelector(R0);
+      break;
+    case Key_R:
+      rotate = rotate_t((rotate + 1) % 4);
+      break;
+    case Key_1:
+      changeDevice(device_id_t(0));
+      break;
+    case Key_2:
+      changeDevice(device_id_t(1));
+      break;
+    case Key_3:
+      changeDevice(device_id_t(2));
+      break;
+    case Key_4:
+      changeDevice(device_id_t(3));
+      break;
+    case Key_5:
+      changeDevice(device_id_t(4));
+      break;
+    case Key_6:
+      changeDevice(device_id_t(5));
+      break;
+    case Key_D:
+      removeDevice(base);
+      break;
+    }
+  }
+}
+
+void GameState::keyReleaseEvent(QKeyEvent *e) {
+  qDebug() << "KeyRelease, status:" << selectorState;
+  using namespace Qt;
+  if (selectorState) {
+    if (e->key() == Key_Space) {
+      selectorState = false;
+      if (deviceFactory == nullptr) {
+        selector->clear();
+        return;
+      }
+      ItemFactory *ground = groundMap(base);
+      Device *device = deviceFactory->createDevice(selector->path(), ground);
+      selector->clear();
+      if (device == nullptr) {
+        qCritical() << "create device failed.";
+        return;
+      }
+      installDevice(base, rotate, device);
+      return;
+    }
+  }
+}
+
+bool GameState::eventFilter(QObject *object, QEvent *event)
 {
-  scene->advance();
+  if (event->type() == QEvent::KeyPress) {
+    keyPressEvent(static_cast<QKeyEvent *>(event));
+    return true;
+  } else if (event->type() == QEvent::KeyRelease) {
+    keyReleaseEvent(static_cast<QKeyEvent *>(event));
+    return true;
+  } else {
+    return QObject::eventFilter(object, event);
+  }
 }
+
+DeviceDescription::DeviceDescription(QPoint point, rotate_t rotate)
+    : p(point), r(rotate) {}
+
+DeviceDescription::DeviceDescription(int x, int y, rotate_t rotate)
+    : p(QPoint(x, y)), r(rotate) {}

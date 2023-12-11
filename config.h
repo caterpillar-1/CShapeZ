@@ -1,9 +1,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-const int TILE_W = 32, TILE_H = 32;
-const int TILES_X = 25, TILES_Y = 18;
+extern const int L; // length of a tile
+extern const int R; // radius of an item
+extern const int TILES_X, TILES_Y;
 
-const int FPS = 60;
+extern const int FPS;
 
 #endif // CONFIG_H

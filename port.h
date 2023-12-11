@@ -3,41 +3,46 @@
 
 #include "item.h"
 
-class Port
-{
+class Port {
 public:
   virtual void connect(Port *otherPort) = 0;
-  virtual void disconnect(bool passive) = 0;
+  virtual void disconnect() = 0;
   virtual ~Port();
 };
 
 class InputPort;
 class OutputPort;
 
-class InputPort: public Port {
+class InputPort : public Port {
 public:
-  InputPort();
+  explicit InputPort();
   ~InputPort();
-  Item *receive();
+  // interface for device
+  const Item *receive();
+
+  // Port interface
   void connect(Port *otherPort) override;
-  void disconnect(bool passive) override;
+  void disconnect() override;
+
 private:
   OutputPort *otherPort;
 };
 
-class OutputPort: public Port {
+class OutputPort : public Port {
 public:
-  OutputPort();
+  explicit OutputPort();
   ~OutputPort();
   // interface for device
-  void send(Item *item);
-  bool ready();
+  bool send(const Item *item);
   // interface for otherPort
-  Item *transmit();
+  const Item *transmit();
+
+  // Port interface
   void connect(Port *otherPort) override;
-  void disconnect(bool passive) override;
+  void disconnect() override;
+
 private:
-  Item *buffer;
+  const Item *buffer;
   InputPort *otherPort;
 };
 

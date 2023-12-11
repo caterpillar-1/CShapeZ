@@ -4,11 +4,11 @@ InputPort::InputPort() : otherPort(nullptr) {}
 
 InputPort::~InputPort() {
   if (otherPort) {
-    otherPort->disconnect(true);
+    otherPort->disconnect();
   }
 }
 
-Item *InputPort::receive() {
+const Item *InputPort::receive() {
   if (otherPort) {
     return otherPort->transmit();
   } else {
@@ -17,22 +17,15 @@ Item *InputPort::receive() {
 }
 
 void InputPort::connect(Port *o) {
+  if (o == otherPort)
+    return;
   if (otherPort) {
-    disconnect(false);
+    otherPort->disconnect();
   }
   otherPort = dynamic_cast<OutputPort *>(o);
 }
 
-void InputPort::disconnect(bool passive) {
-  if (passive) {
-    otherPort = nullptr;
-  } else {
-    if (otherPort) {
-      otherPort->disconnect(true);
-    }
-    otherPort = nullptr;
-  }
-}
+void InputPort::disconnect() { otherPort = nullptr; }
 
 OutputPort::OutputPort() : otherPort(nullptr), buffer(nullptr) {}
 
@@ -41,49 +34,32 @@ OutputPort::~OutputPort() {
     delete buffer;
   }
   if (otherPort) {
-    otherPort->disconnect(true);
+    otherPort->disconnect();
   }
 }
 
-void OutputPort::send(Item *item) {
+bool OutputPort::send(const Item *item) {
   assert(item);
-  assert(buffer == nullptr);
   if (buffer) {
-    return;
-  } else {
-    buffer = item;
-    return;
+    return false;
   }
+  buffer = item;
+  return true;
 }
 
-bool OutputPort::ready() {
-  return buffer == nullptr;
-}
-
-Item *OutputPort::transmit() {
-  Item *ret = buffer;
+const Item *OutputPort::transmit() {
+  const Item *ret = buffer;
   buffer = nullptr;
   return ret;
 }
 
 void OutputPort::connect(Port *o) {
   if (otherPort) {
-    otherPort->disconnect(true);
+    otherPort->disconnect();
   }
   otherPort = dynamic_cast<InputPort *>(o);
 }
 
-void OutputPort::disconnect(bool passive)
-{
-  if (passive) {
-    otherPort = nullptr;
-  } else {
-    otherPort->disconnect(true);
-    otherPort = nullptr;
-  }
-}
+void OutputPort::disconnect() { otherPort = nullptr; }
 
-Port::~Port()
-{
-
-}
+Port::~Port() {}

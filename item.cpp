@@ -1,40 +1,56 @@
 #include "item.h"
-#include "config.h"
 
 Item::Item() {}
 
-Mine::Mine(enum type_t type_, enum shape_t shape_, rotate_t rotate_,
-           enum trait_t trait_)
-    : type_(type_), shape_(shape_), rotate_(rotate_), trait_(trait_) {}
+void Item::paint(QPainter *painter) const {
+  qWarning() << "default item image is painted.";
+  painter->save();
+  painter->setPen(Qt::red);
+  painter->drawRect(QRectF(-R, -R, R, R));
+  painter->drawLine(-R, -R, R, R);
+  painter->drawLine(R, -R, -R, R);
+  painter->restore();
+}
+
+TraitMine::TraitMine(trait_t trait) : trait(trait) {}
+
+trait_t TraitMine::getTrait() const { return trait; }
+
+Mine::Mine(type_t type, shape_t shape, rotate_t rotate, trait_t trait)
+    : type(type), shape(shape), rotate(rotate), trait(trait) {}
 
 Mine::Mine(const Mine &o)
-    : type_(o.type_), shape_(o.shape_), rotate_(o.rotate_), trait_(o.trait_) {}
+    : type(o.type), shape(o.shape), rotate(o.rotate), trait(o.trait) {}
 
-bool Mine::operator==(const Mine &o) {
-  return type_ == o.type_ && shape_ == o.shape_ && trait_ == o.trait_;
+bool Mine::operator==(const Mine &o) const {
+  return type == o.type && shape == o.shape && trait == o.trait;
 }
 
-void Item::advance(int phase) {}
+const Mine *Mine::setTrait(trait_t trait) const {
+  return new Mine(type, shape, rotate, trait);
+}
 
-// format: off
+const Mine *Mine::rotateR() const {
+  return new Mine(type, shape, rotate_t((rotate + 3) % 4), trait);
+}
 
-Mine *Mine::getUpperHalf() {
-  switch (shape_) {
+const Mine *Mine::cutUpper() const {
+  switch (shape) {
   case FULL:
-    return new Mine(type_, HALF, R0, trait_);
+    return new Mine(type, HALF, R0, trait);
   case HALF:
-    switch (rotate_) {
+    switch (rotate) {
     case R0:
       return new Mine(*this);
     case R90:
-      return new Mine(type_, QUARTER, R90, trait_);
+      return new Mine(type, QUARTER, R90, trait);
     case R180:
       return nullptr;
     case R270:
-      return new Mine(type_, QUARTER, R0, trait_);
+      return new Mine(type, QUARTER, R0, trait);
     }
   case QUARTER:
-    switch (rotate_) {
+    switch (rotate) {
     case R0:
     case R90:
       return new Mine(*this);
@@ -42,26 +58,25 @@ Mine *Mine::getUpperHalf() {
       return nullptr;
     }
   }
-  return nullptr;
 }
 
-Mine *Mine::getLowerHalf() {
-  switch (shape_) {
+const Mine *Mine::cutLower() const {
+  switch (shape) {
   case FULL:
-    return new Mine(type_, HALF, R180, trait_);
+    return new Mine(type, HALF, R180, trait);
   case HALF:
-    switch (rotate_) {
+    switch (rotate) {
     case R0:
       return nullptr;
     case R90:
-      return new Mine(type_, QUARTER, R180, trait_);
+      return new Mine(type, QUARTER, R180, trait);
     case R180:
       return new Mine(*this);
     case R270:
-      return new Mine(type_, QUARTER, R270, trait_);
+      return new Mine(type, QUARTER, R270, trait);
     }
   case QUARTER:
-    switch (rotate_) {
+    switch (rotate) {
     case R0:
     case R90:
       return nullptr;
@@ -69,156 +84,40 @@ Mine *Mine::getLowerHalf() {
       return new Mine(*this);
     }
   }
-  return nullptr;
 }
 
-Mine *Mine::getLeftHalf() {
-  switch (shape_) {
-  case FULL:
-    return new Mine(type_, HALF, R90, trait_);
-  case HALF:
-    switch (rotate_) {
-    case R0:
-      return new Mine(type_, QUARTER, R90, trait_);
-    case R90:
-      return new Mine(*this);
-    case R180:
-      return new Mine(type_, QUARTER, R180, trait_);
-    case R270:
-      return nullptr;
-    }
-  case QUARTER:
-    switch (rotate_) {
-    case R90:
-    case R180:
-      return new Mine(*this);
-    default:
-      return nullptr;
-    }
-  }
-  return nullptr;
-}
-
-Mine *Mine::getRightHalf() {
-  switch (shape_) {
-  case FULL:
-    return new Mine(type_, HALF, R270, trait_);
-  case HALF:
-    switch (rotate_) {
-    case R0:
-      return new Mine(type_, QUARTER, R0, trait_);
-    case R90:
-      return nullptr;
-    case R180:
-      return new Mine(type_, QUARTER, R270, trait_);
-    case R270:
-      return new Mine(*this);
-    }
-  case QUARTER:
-    switch (rotate_) {
-    case R0:
-    case R270:
-      return new Mine(*this);
-    default:
-      return nullptr;
-    }
-  }
-  return nullptr;
-}
-
-Mine *Mine::getRotateLeft() {
-  return new Mine(type_, shape_, rotate_t((rotate_ + 1) % 4), trait_);
-}
-
-Mine *Mine::getRotateRight() {
-  return new Mine(type_, shape_, rotate_t((rotate_ + 3) % 4), trait_);
-}
-
-void Mine::addTrait(TraitMine &t) { trait_ = t.getTrait(); }
-// format: on
-
-QRectF Mine::boundingRect() const { return QRectF(0, 0, TILE_W, TILE_H); }
-
-QPainterPath Mine::shape() const {
-  QPainterPath path;
-  QRectF bound = boundingRect();
-  path.addEllipse(bound);
-  return path;
-}
-
-void Mine::paint(QPainter *painter, const QStyleOptionGraphicsItem *,
-                 QWidget *) {
+void Mine::paint(QPainter *painter) const {
   painter->save();
-  QBrush brush((Qt::GlobalColor)trait_);
-  QRectF bound = boundingRect();
-  painter->setBrush(brush);
-  switch (type_) {
+  painter->setBrush(QBrush(Qt::GlobalColor(trait)));
+  QRectF bound(-R, -R, 2*R, 2*R);
+  switch (type) {
   case ROUND:
-    painter->drawPie(bound, rotate_ * 90 * 16, shape_ * 90 * 16);
+    painter->drawPie(bound, rotate * 90 * 16, shape * 90 * 16);
     break;
   case SQUARE:
-    painter->translate(TILE_W / 2, TILE_H / 2);
-    painter->rotate(-rotate_ * 90);
-    switch (shape_) {
+    painter->rotate(-rotate * 90);
+    switch (shape) {
     case FULL:
-      painter->drawRect(QRectF(-TILE_W / 2, 0, TILE_W / 2, TILE_H / 2));
-      painter->drawRect(QRectF(0, 0, TILE_W / 2, TILE_H / 2));
+      painter->drawRect(QRectF(-R, 0, R, R));
+      painter->drawRect(QRectF(0, 0, R, R));
     case HALF: // fall through
-      painter->drawRect(
-          QRectF(-TILE_W / 2, -TILE_H / 2, TILE_W / 2, TILE_H / 2));
+      painter->drawRect(QRectF(-R, -R, R, R));
     case QUARTER: // fall through
-      painter->drawRect(QRectF(0, -TILE_H / 2, TILE_W / 2, TILE_H / 2));
+      painter->drawRect(QRectF(0, -R, R, R));
     }
   }
   painter->restore();
 }
 
-TraitMine::TraitMine(trait_t trait_) : trait_(trait_) {}
-
-trait_t TraitMine::getTrait() { return trait_; }
-
-QRectF TraitMine::boundingRect() const { return QRect(0, 0, TILE_W, TILE_H); }
-
-QPainterPath TraitMine::shape() const {
-  QPainterPath path;
-  QRectF bound = boundingRect();
-  path.addEllipse(bound);
-  return path;
-}
-
-void TraitMine::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                      QWidget *widget) {
-  painter->save();
-  QBrush brush((Qt::GlobalColor)trait_);
-  painter->setBrush(brush);
-  painter->drawEllipse(QPoint(TILE_W / 2, TILE_H / 2), TILE_W / 2, TILE_H / 4);
-  painter->restore();
-}
-
+ItemFactory::~ItemFactory() {}
 
 MineFactory::MineFactory(type_t type, trait_t trait)
-  : type(type), trait(trait)
-{
+    : type(type), trait(trait) {}
 
-}
-
-Mine *MineFactory::createItem()
-{
+Mine *MineFactory::createItem() const {
   return new Mine(type, FULL, R0, trait);
 }
 
-TraitFactory::TraitFactory(trait_t trait)
-  : trait(trait)
-{
+TraitFactory::TraitFactory(trait_t trait) : trait(trait) {}
 
-}
-
-TraitMine *TraitFactory::createItem()
-{
-  return new TraitMine(trait);
-}
-
-ItemFactory::~ItemFactory()
-{
-
-}
+TraitMine *TraitFactory::createItem() const { return new TraitMine(trait); }

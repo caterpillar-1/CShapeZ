@@ -1,27 +1,29 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QMainWindow>
 #include <QtWidgets>
 #include "gamestate.h"
 
 class MainWindow : public QMainWindow
 {
   Q_OBJECT
-
 public:
-  MainWindow(QWidget *parent = nullptr);
+  explicit MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
+
+private:
+  void addMenus();
+  void addToolBars();
+
+public slots:
+  void deviceChangeEvent(device_id_t id);
 
 private:
   QGraphicsScene *scene;
   QGraphicsView *view;
+  QList<QAction *> deviceButtons;
 
   GameState *game;
-
-  QList<QAction *> machines;
-
-private slots:
-  void handleMachineChange(bool checked);
 };
+
 #endif // MAINWINDOW_H

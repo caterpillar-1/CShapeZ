@@ -1,273 +1,285 @@
 #include "device.h"
-#include "config.h"
+#include <set>
 
-Device::Device(GameState &game, const QPoint &base, rotate_t rotate, const QList<QPoint> &blocks)
-  : game(game), base_(base), rotate_(rotate), blocks(blocks) {}
-
-Device::Device(GameState &game, const QPoint &base, rotate_t rotate)
-  : game(game), base_(base), rotate_(rotate)
-{
-  blocks.clear();
-  blocks.append(QPoint(0, 0));
+Device::Device(int speed, const QList<QPoint> &blocks) : blocks_(blocks) {
+  assert(!blocks.empty());
+  setSpeed(speed);
 }
 
-Device::~Device() {}
+const QList<QPoint> &Device::blocks() const { return blocks_; }
 
-void Device::install() {
-  for (int i = 0; i < blocks.size(); i++) {
-    int x, y;
-    rotate_t o;
-    convertToMap(i, R0, x, y, o);
-    Q_UNUSED(o);
-    game.setDevice(x, y, this);
+void Device::advance(int phase) {
+  if (frameCount >= speed) {
+    next();
+    frameCount = 0;
+  } else {
+    frameCount++;
   }
-  connectPorts();
 }
 
-void Device::remove() {
-  for (int i = 0; i < blocks.size(); i++) {
-    int x, y;
-    rotate_t o;
-    convertToMap(i, R0, x, y, o);
-    Q_UNUSED(o);
-    game.setDevice(x, y, nullptr);
-  }
-  disconnectPorts();
-}
-
-const QList<QPoint> &Device::getBlocks() { return blocks; }
-
-const QPoint &Device::getBase()
-{
-  return base_;
-}
-
-const rotate_t Device::getRotate() { return rotate_; }
-
-void Device::connectPortAt(Port *port, int i, rotate_t d) {
-  assert(port);
-  qDebug() << "connectPortAt:" << port << i << d;
-  int x, y;
-  rotate_t o;
-  convertToMap(i, d, x, y, o);
-  qDebug() << "The dest block is:" << x << y;
-  Port *otherPort = game.getOtherPort(x, y, o);
-  qDebug() << "The other port is:" << otherPort;
-  if (!otherPort) {
-    return;
-  }
-  otherPort->connect(port);
-  port->connect(otherPort);
-}
-
-void Device::disconnectPortAt(Port *port, int i, rotate_t d)
-{
-  assert(port);
-  int x, y;
-  rotate_t o;
-  convertToMap(i, d, x, y, o);
-  Port *otherPort = game.getOtherPort(x, y, o);
-  if (!otherPort) {
-    return;
-  }
-  otherPort->disconnect(true);
-  port->disconnect(true);
-}
-
-const QPoint Device::coordinate(int i) {
-  int x, y;
-  rotate_t o;
-  convertToMap(i, R0, x, y, o);
-  Q_UNUSED(o);
-  return QPoint(x * TILE_W, y * TILE_H);
+void Device::setSpeed(int speed) {
+  // sanity check, bound: [1, 10) s
+  assert(speed >= 1 && speed < 10 * FPS);
+  this->speed = speed;
 }
 
 QRectF Device::boundingRect() const {
-  assert(!blocks.empty());
-  assert(blocks.first() == QPoint(0, 0));
   int xmin, xmax, ymin, ymax;
-  xmin = xmax = blocks.first().x();
-  ymin = ymax = blocks.first().y();
-  for (const auto &p : blocks) {
+  xmin = xmax = blocks_.first().x();
+  ymin = ymax = blocks_.first().y();
+  for (const auto &p : blocks_) {
     xmin = std::min(xmin, p.x());
     xmax = std::max(xmax, p.x());
     ymin = std::min(ymin, p.y());
     ymax = std::max(ymax, p.y());
   }
-  xmax += 1;
-  ymax += 1;
-  return QRectF(xmin * TILE_W, ymin * TILE_H, xmax * TILE_W, ymax * TILE_H);
+  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
+                (ymax-ymin+1)*L);
 }
 
 QPainterPath Device::shape() const {
   QPainterPath path;
   path.setFillRule(Qt::WindingFill);
 
-  for (const auto &p : blocks) {
-    path.addRect(QRectF(p.x() * TILE_W, p.y() * TILE_H, TILE_W, TILE_H));
+  for (const auto &p : blocks_) {
+    int x = p.x(), y = p.y();
+    path.addRect(QRectF(x * L - L / 2, y * L - L / 2, L, L));
   }
 
   return path;
 }
 
-void Device::convertToMap(int i, rotate_t d, int &x, int &y, rotate_t &o) {
-  assert(0 <= i && i < blocks.size());
-  const QPoint &pos = blocks[i];
-  switch (d) {
-  case R0:
-    x = base_.x() + pos.x();
-    y = base_.y() + pos.y();
-    break;
-  case R90:
-    x = base_.x() + pos.y();
-    y = base_.y() - pos.x();
-    break;
-  case R180:
-    x = base_.x() - pos.x();
-    y = base_.y() - pos.y();
-    break;
-  case R270:
-    x = base_.x() - pos.y();
-    y = base_.y() + pos.x();
-    break;
-  default:
-    break;
+void Device::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                   QWidget *widget) {
+  qWarning() << "default device image is painted.";
+  painter->save();
+  for (auto &p : blocks_) {
+    int x = p.x(), y = p.y();
+    painter->drawRect(x * L - L / 2, y * L - L / 2, L, L);
+    painter->drawLine(x * L - L / 2, y * L - L / 2, x * L + L / 2,
+                      y * L + L / 2);
+    painter->drawLine(x * L + L / 2, y * L - L / 2, x * L - L / 2,
+                      y * L + L / 2);
   }
-  o = rotate_t((d + rotate_) % 4);
+  painter->restore();
 }
 
-Miner::Miner(GameState &game, const QPoint &base, rotate_t rotate)
-  : Device(game, base, rotate)
-{
-
-}
+Miner::Miner(ItemFactory *factory, int speed)
+    : Device(speed), factory(factory) {}
 
 void Miner::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
-  painter->drawRect(0, 0, TILE_W, TILE_H);
-  QBrush brush(Qt::green);
-  painter->setBrush(brush);
-  painter->translate(TILE_W / 2, TILE_H / 2);
-  painter->rotate(getRotate() * 90);
-  const QPointF path[] = {{-5, -5}, {-5, 5}, {3, 0}};
-  painter->drawPolygon(path, 3);
+  painter->setBrush(QBrush(Qt::green));
+  static const QPoint points[3] = {
+      {-L / 2, -L / 2}, {-L / 2, L / 2}, {L / 3, 0}};
+  painter->drawPolygon(points, 3);
   painter->restore();
 }
 
-void Miner::connectPorts() { connectPortAt(&out, 0, R0); }
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Miner::ports() {
+  QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
+  ret.push_back({static_cast<Port *>(&out), {QPoint(0, 0), R0}});
+  return ret;
+}
 
-void Miner::disconnectPorts() { out.disconnect(false); }
+void Miner::next() {
+  if (!factory)
+    return;
+  Item *item = factory->createItem();
+  if (out.send(item) == false) {
+    delete item;
+  }
+}
 
-Belt::Belt(GameState &game, QPoint base, rotate_t rotate, const QList<QPoint> &blocks)
-  : Device(game, base, rotate, blocks)
-{
-  buffer.resize(blocks.size());
+Belt::Belt(int speed, const QList<QPoint> &blocks) : Device(speed, blocks) {
+  buffer.resize(blocks.size(), nullptr);
 }
 
 void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                 QWidget *widget) {}
-
-void Belt::connectPorts() {
-  for (int d = R0; d < 4; d++) {
-    connectPortAt(&in, 0, rotate_t(d));
-  }
-
-  for (int d = R0; d < 4; d++) {
-    connectPortAt(&out, getBlocks().size() - 1, rotate_t(d));
-  }
-}
-
-void Belt::disconnectPorts() {
-  for (int d = R0; d < 4; d++) {
-    disconnectPortAt(&in, 0, rotate_t(d));
-  }
-
-  for (int d = R0; d < 4; d++) {
-    disconnectPortAt(&out, getBlocks().size() - 1, rotate_t(d));
-  }
-}
-
-void Belt::advance(int phase) {
-  assert(buffer.size() == getBlocks().size());
-
-  if (phaseCount >= BELT_SPEED) {
-    Item *item;
-    if (out.ready()) {
-      if ((item = buffer.back()) != nullptr) {
-        out.send(item);
-        buffer.back() = nullptr;
-      }
+                 QWidget *widget) {
+  painter->save();
+  painter->setBrush(QBrush(Qt::gray));
+  static const QPoint points[4] = {
+      {-L / 3, -L / 3},
+      {-L / 4, 0},
+      {-L / 3, L / 3},
+      {L / 4, 0},
+  };
+  for (int i = 0; i < blocks().size(); i++) {
+    painter->save();
+    int x = blocks()[i].x(), y = blocks()[i].y();
+    painter->translate(x * L, y * L);
+    painter->save();
+    painter->drawPolygon(points, 4);
+    painter->restore();
+    if (buffer[i]) {
+      buffer[i]->paint(painter);
     }
-    for (int i = buffer.size() - 2; i >= 0; i--) {
-      if (buffer[i + 1] == nullptr) {
-        buffer[i + 1] = buffer[i];
-        if (buffer[i + 1] != nullptr) {
-          buffer[i + 1]->setPos(coordinate(i + 1));
+    painter->restore();
+  }
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Belt::ports() {
+  QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
+  ret.append({
+      {static_cast<Port *>(&in), {blocks().front(), R180}},
+      {static_cast<Port *>(&out), {blocks().back(), R0}},
+  });
+  return ret;
+}
+
+void Belt::next() {
+  if (buffer.back()) {
+    if (out.send(buffer.back())) {
+      buffer.back() = nullptr;
+    }
+  }
+  for (int i = buffer.size() - 2; i >= 0; i--) {
+    if (buffer[i + 1] == nullptr) {
+      buffer[i + 1] = buffer[i];
+      buffer[i] = nullptr;
+    }
+  }
+  if (buffer[0] == nullptr) {
+    buffer[0] = in.receive();
+  }
+  update();
+}
+
+Trash::Trash(int speed) : Device(speed) {}
+
+void Trash::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                  QWidget *widget) {
+  painter->save();
+  painter->drawRect(-L / 2, -L / 2, L, L);
+  painter->drawText(QPoint(-L/2, 0), "Trash");
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Trash::ports() {
+  QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
+  for (auto &e : in) {
+    ret.push_back({&e.first, e.second});
+  }
+  return ret;
+}
+
+void Trash::next() {
+  for (auto &e : in) {
+    const Item *item = e.first.receive();
+    if (item) {
+      qDebug() << "Trash received item!";
+      delete item;
+    }
+  }
+}
+
+Center::Center(int speed)
+    : Device(speed, []() {
+        QList<QPoint> ret;
+        for (int i = 0; i < 4; i++) {
+          for (int j = 0; j < 4; j++) {
+            ret.push_back(QPoint(i, j));
+          }
         }
-        buffer[i] = nullptr;
-      }
+        return ret;
+      }()) {}
+
+void Center::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                   QWidget *widget) {
+  painter->save();
+  painter->translate(-L / 2, -L / 2);
+  painter->drawRect(boundingRect());
+  painter->drawText(boundingRect(), "Center");
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Center::ports() {
+  QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
+  for (auto &p : in) {
+    ret.push_back({&p.first, p.second});
+  }
+  return ret;
+}
+
+void Center::next() {
+  for (auto &e : in) {
+    const Item *item = e.first.receive();
+    if (item) {
+      delete item;
     }
-    if (buffer.front() == nullptr && (item = in.receive()) != nullptr) {
-      buffer.front() = item;
-      item->show();
-      item->setPos(coordinate(0));
-    }
-  } else {
-    phaseCount++;
   }
 }
 
-void Miner::advance(int phase) {
-//  qDebug() << "Miner::advance";
-  if (phaseCount >= MINER_SPEED) {
-    if (out.ready()) {
-      Item *item = game.getItem(getBase().x(), getBase().y());
-      item->setPos(coordinate(0));
-      if (item) {
-        out.send(item);
-        phaseCount = 0;
+DeviceFactory::DeviceFactory(int speed) : speed_(speed) {}
+
+int DeviceFactory::speed() { return speed_; }
+
+void DeviceFactory::setSpeed(int speed) { speed_ = speed; }
+
+MinerFactory::MinerFactory(int speed)
+    : DeviceFactory(speed) {
+}
+
+Miner *MinerFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+  return new Miner(itemFactory, speed());
+}
+
+BeltFactory::BeltFactory(int speed) : DeviceFactory(speed) {}
+
+bool operator<(const QPoint& a, const QPoint& b) {
+  if (a.x() != b.x()) return a.x() < b.x();
+  return a.y() < b.y();
+}
+
+Belt *BeltFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+  assert(blocks.size() >= 1);
+  std::set<QPoint> points;
+  if (blocks.size() > 1) {
+    QPoint p = blocks.front();
+    points.insert(p);
+    for (int i = 1; i < blocks.size(); i++) {
+      QPoint np = blocks[i];
+      bool flag = false;
+      for (int k = 0; k < 4; k++) {
+        if (np == p + QPoint(dx[k], dy[k])) {
+          flag = true;
+          break;
+        }
       }
+      if (!flag)
+        return nullptr;
+      if (points.find(np) != points.end())
+        return nullptr;
+      points.insert(np);
+      p = np;
     }
-  } else {
-    phaseCount++;
   }
+  return new Belt(speed(), blocks);
 }
 
-MinerFactory::MinerFactory(GameState &game)
-  : DeviceFactory(game)
-{
+TrashFactory::TrashFactory(int speed) : DeviceFactory(speed) {}
 
+Trash *TrashFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+  return new Trash(speed());
 }
 
-Miner *MinerFactory::createDevice(QPoint base, rotate_t rotate, const QList<QPoint> &blocks)
-{
-  return new Miner(getGame(), base, rotate);
-}
+static DeviceFactory *globalDeviceFactories[] = {
+  new MinerFactory(Miner::MINER_SPEED),
+  new BeltFactory(Belt::BELT_SPEED),
+  nullptr,
+  nullptr,
+  nullptr,
+  new TrashFactory(Trash::TRASH_SPEED),
+  nullptr
+};
 
-DeviceFactory::DeviceFactory(GameState &game)
-  : game_(game)
-{
-
-}
-
-DeviceFactory::~DeviceFactory()
-{
-
-}
-
-GameState &DeviceFactory::getGame()
-{
-  return game_;
-}
-
-BeltFactory::BeltFactory(GameState &game)
-  : DeviceFactory(game)
-{
-
-}
-
-Belt *BeltFactory::createDevice(QPoint base, rotate_t rotate, const QList<QPoint> &blocks)
-{
-  return new Belt(getGame(), base, rotate, blocks);
+DeviceFactory *getDeviceFactory(device_id_t id) {
+  assert(id < DEV_NONE);
+  if (globalDeviceFactories[id] == nullptr) {
+    qWarning() << "unsupported device id" << id;
+  }
+  return globalDeviceFactories[id];
 }
