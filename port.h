@@ -18,6 +18,7 @@ public:
   explicit InputPort();
   ~InputPort();
   // interface for device
+  bool ready();
   const Item *receive();
 
   // Port interface
@@ -34,7 +35,10 @@ public:
   ~OutputPort();
   // interface for device
   bool send(const Item *item);
+  bool ready();
+  const Item *getBuffer();
   // interface for otherPort
+  bool valid();
   const Item *transmit();
 
   // Port interface

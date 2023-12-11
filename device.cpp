@@ -267,12 +267,12 @@ Trash *TrashFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *item
 }
 
 static DeviceFactory *globalDeviceFactories[] = {
-  new MinerFactory(Miner::MINER_SPEED),
-  new BeltFactory(Belt::BELT_SPEED),
-  nullptr,
-  nullptr,
-  nullptr,
-  new TrashFactory(Trash::TRASH_SPEED),
+  new MinerFactory(),
+  new BeltFactory(),
+  new CutterFactory(),
+  new MixerFactory(),
+  new RotatorFactory(),
+  new TrashFactory(),
   nullptr
 };
 
@@ -282,4 +282,156 @@ DeviceFactory *getDeviceFactory(device_id_t id) {
     qWarning() << "unsupported device id" << id;
   }
   return globalDeviceFactories[id];
+}
+
+Cutter::Cutter(int speed)
+  : Device(speed, { {0, 0}, {0, 1} }), stall(false)
+{
+
+}
+
+void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+  painter->save();
+  painter->drawRect(-L/2, -L/2, L, 2*L);
+  painter->drawText(QPoint(-L/2,0), "Cutter");
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Cutter::ports()
+{
+  return {
+    { &in, { {0, 0}, R180 }},
+    { &outU, {{0, 0}, R0 }},
+    { &outL, {{0, 1}, R0 }},
+  };
+}
+
+void Cutter::next()
+{
+  if (stall) return;
+  if (outU.ready() && outL.ready()) {
+    const Item *item = in.receive();
+    if (!item) return;
+    const Mine *mine = dynamic_cast<const Mine *>(item);
+    if (!mine) {
+      stall = true;
+      return;
+    }
+    outU.send(mine->cutUpper());
+    outL.send(mine->cutLower());
+    delete mine;
+  }
+}
+
+CutterFactory::CutterFactory(int speed)
+  : DeviceFactory(speed)
+{
+
+}
+
+Cutter *CutterFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
+{
+  return new Cutter(speed());
+}
+
+Rotator::Rotator(int speed)
+  : Device(speed)
+{
+}
+
+void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+  painter->save();
+  painter->drawRect(-L/2, -L/2, L, L);
+  painter->drawText(QPoint(-L/2, 0), "Rotator");
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Rotator::ports()
+{
+  return {
+    { &in, {{0, 0}, R180}},
+    { &out, {{0, 0}, R0 }},
+  };
+}
+
+void Rotator::next()
+{
+  if (out.ready()) {
+    auto item = in.receive();
+    if (!item) return;
+    auto mine = dynamic_cast<const Mine *>(item);
+    if (mine) {
+      out.send(mine->rotateR());
+      delete mine;
+    } else {
+      out.send(item);
+    }
+  }
+}
+
+RotatorFactory::RotatorFactory(int speed)
+  : DeviceFactory(speed)
+{
+
+}
+
+Rotator *RotatorFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
+{
+  return new Rotator(speed());
+}
+
+Mixer::Mixer(int speed)
+  : Device(speed, {{0, 0}, {1, 0}}), stall(false)
+{
+
+}
+
+void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+  painter->save();
+  painter->drawRect(-L/2, -L/2, 2*L, L);
+  painter->drawText(QPoint(-L/2, 0), "Mixer");
+  painter->restore();
+}
+
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Mixer::ports()
+{
+  return {
+    { &inMine, {{0, 0}, R180}},
+    { &inTrait, {{0, 0}, R90}},
+    { &out, {{0, 1}, R0}},
+  };
+}
+
+void Mixer::next()
+{
+  if (!(inMine.ready() && inTrait.ready() && out.ready()))
+    return;
+  const Item *itemMine = inMine.receive();
+  const Item *itemTrait = inTrait.receive();
+  const Mine *mine = dynamic_cast<const Mine *>(itemMine);
+  const TraitMine *trait = dynamic_cast<const TraitMine *>(itemTrait);
+  if (!mine || !trait) {
+    stall = true;
+    delete itemMine;
+    delete itemTrait;
+    return;
+  }
+
+  out.send(mine->setTrait(trait->getTrait()));
+  delete itemMine;
+  delete itemTrait;
+}
+
+MixerFactory::MixerFactory(int speed)
+  : DeviceFactory(speed)
+{
+
+}
+
+Mixer *MixerFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
+{
+  return new Mixer(speed());
 }

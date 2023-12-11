@@ -8,6 +8,11 @@ InputPort::~InputPort() {
   }
 }
 
+bool InputPort::ready()
+{
+  return otherPort && otherPort->valid();
+}
+
 const Item *InputPort::receive() {
   if (otherPort) {
     return otherPort->transmit();
@@ -45,6 +50,21 @@ bool OutputPort::send(const Item *item) {
   }
   buffer = item;
   return true;
+}
+
+bool OutputPort::ready()
+{
+  return buffer == nullptr;
+}
+
+const Item *OutputPort::getBuffer()
+{
+  return buffer;
+}
+
+bool OutputPort::valid()
+{
+  return buffer != nullptr;
 }
 
 const Item *OutputPort::transmit() {

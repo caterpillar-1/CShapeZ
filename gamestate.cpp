@@ -43,12 +43,17 @@ bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
   auto blocks = device->blocks();
   auto portEntries = device->ports();
 
-  // allocating blocks
+  // check bound
   for (auto &block : blocks) {
     auto p = mapToMap(block, base, rotate);
     if (!inRange(p)) {
       return false;
     }
+  }
+
+  // allocating blocks
+  for (auto &block : blocks) {
+    auto p = mapToMap(block, base, rotate);
 
     auto &d = deviceMap(p);
     if (d) {
@@ -78,8 +83,8 @@ bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
 
   // add to gui
   scene->addItem(device);
-  device->setPos(base.x()*L + L/2, base.y()*L + L/2);
-  device->setRotation(rotate * 90);
+  device->setPos(base.x() * L + L / 2, base.y() * L + L / 2);
+  device->setRotation(-rotate * 90);
 
   devices.insert({device, {base, rotate}});
   return true;
@@ -198,29 +203,23 @@ Port *GameState::otherPort(QPoint p, rotate_t r) {
 
 void GameState::moveSelector(rotate_t d) {
   QPoint cur_p = base + offset, np = cur_p + QPoint(dx[d], dy[d]);
-  qDebug() << "moveSelector(" << d <<") from" << cur_p << "to" << np << ".";
   if (!inRange(np)) {
-    qDebug() << "Out of bound!";
     return;
   }
   offset += QPoint(dx[d], dy[d]);
   selector->move(rotate_t((d + 4 - rotate) % 4));
-  qDebug() << "Selector position:" << base;
 }
 
 void GameState::shiftSelector(rotate_t d) {
   assert(inRange(base));
   int nx = base.x() + dx[d], ny = base.y() + dy[d];
-  qDebug() << "shiftSelector(" << d <<") from" << base << "to" << QPoint(nx, ny);
   if (!inRange(nx, ny)) {
-    qDebug() << "Out of bound!";
     return;
   }
 
   base = {nx, ny};
   selector->setPos(nx * L + L / 2, ny * L + L / 2);
   selector->ensureVisible();
-  qDebug() << "Selector position:" << base;
 }
 
 Selector::Selector(QObject *parent)
@@ -255,10 +254,8 @@ QRectF Selector::boundingRect() const {
     ymin = std::min(ymin, p.y());
     ymax = std::max(ymax, p.y());
   }
-//  qDebug() << "Selector boundingRect():" << QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
-//                                                   (ymax-ymin+1)*L);
-  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
-      (ymax-ymin+1)*L);
+  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax - xmin + 1) * L,
+                (ymax - ymin + 1) * L);
 }
 
 QPainterPath Selector::shape() const {
@@ -270,13 +267,11 @@ QPainterPath Selector::shape() const {
     path.addRect(QRectF(x * L - L / 2, y * L - L / 2, L, L));
   }
 
-//  qDebug() << "Selector shape(): " << path;
   return path;
 }
 
 void Selector::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                      QWidget *widget) {
-  qDebug() << "Selector paint(), pos:" << pos();
   assert(path_.size() >= 1);
   painter->save();
   painter->setBrush(QColor(0, 0, 255, 50));
@@ -292,7 +287,6 @@ void Selector::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 void GameState::timerEvent(QTimerEvent *) { scene->advance(); }
 
 void GameState::keyPressEvent(QKeyEvent *e) {
-  qDebug() << "KeyPress, status:" << selectorState;
   using namespace Qt;
   if (selectorState) {
     if (e->key() == Key_Space)
@@ -340,6 +334,7 @@ void GameState::keyPressEvent(QKeyEvent *e) {
       break;
     case Key_R:
       rotate = rotate_t((rotate + 1) % 4);
+      selector->setRotation(-rotate * 90);
       break;
     case Key_1:
       changeDevice(device_id_t(0));
@@ -367,7 +362,6 @@ void GameState::keyPressEvent(QKeyEvent *e) {
 }
 
 void GameState::keyReleaseEvent(QKeyEvent *e) {
-  qDebug() << "KeyRelease, status:" << selectorState;
   using namespace Qt;
   if (selectorState) {
     if (e->key() == Key_Space) {
@@ -389,8 +383,7 @@ void GameState::keyReleaseEvent(QKeyEvent *e) {
   }
 }
 
-bool GameState::eventFilter(QObject *object, QEvent *event)
-{
+bool GameState::eventFilter(QObject *object, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
     keyPressEvent(static_cast<QKeyEvent *>(event));
     return true;

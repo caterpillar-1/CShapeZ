@@ -94,6 +94,81 @@ public:
   Belt *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
 };
 
+class Cutter: public Device {
+  Q_OBJECT
+public:
+  static constexpr int CUTTER_SPEED = 240;
+  explicit Cutter(int speed = CUTTER_SPEED);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
+
+protected:
+  void next() override;
+
+private:
+  InputPort in;
+  OutputPort outU, outL;
+
+  bool stall;
+};
+
+class CutterFactory: public DeviceFactory {
+public:
+  explicit CutterFactory(int speed = Cutter::CUTTER_SPEED);
+
+  // DeviceFactory interface
+  Cutter *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+};
+
+class Rotator: public Device {
+  Q_OBJECT
+public:
+  static constexpr int ROTATOR_SPEED = 90;
+  explicit Rotator(int speed = ROTATOR_SPEED);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
+
+protected:
+  void next() override;
+
+private:
+  InputPort in;
+  OutputPort out;
+};
+
+class RotatorFactory: public DeviceFactory {
+public:
+  explicit RotatorFactory(int speed = Rotator::ROTATOR_SPEED);
+
+  // DeviceFactory interface
+  Rotator *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+};
+
+class Mixer: public Device {
+  Q_OBJECT
+public:
+  static constexpr int MIXER_SPEED = 240;
+  explicit Mixer(int speed = MIXER_SPEED);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
+
+protected:
+  void next() override;
+
+private:
+  InputPort inMine, inTrait;
+  OutputPort out;
+  bool stall;
+};
+
+class MixerFactory: public DeviceFactory {
+public:
+  explicit MixerFactory(int speed = Rotator::ROTATOR_SPEED);
+
+  // DeviceFactory interface
+  Mixer *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+};
+
 class Trash: public Device {
   Q_OBJECT
 public:
