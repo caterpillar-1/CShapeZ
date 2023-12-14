@@ -8,7 +8,7 @@ InputPort::~InputPort() {
   }
 }
 
-bool InputPort::ready()
+bool InputPort::ready() const
 {
   return otherPort && otherPort->valid();
 }
@@ -52,7 +52,7 @@ bool OutputPort::send(const Item *item) {
   return true;
 }
 
-bool OutputPort::ready()
+bool OutputPort::ready() const
 {
   return buffer == nullptr;
 }
@@ -62,7 +62,7 @@ const Item *OutputPort::getBuffer()
   return buffer;
 }
 
-bool OutputPort::valid()
+bool OutputPort::valid() const
 {
   return buffer != nullptr;
 }
@@ -83,3 +83,14 @@ void OutputPort::connect(Port *o) {
 void OutputPort::disconnect() { otherPort = nullptr; }
 
 Port::~Port() {}
+
+PortHint::PortHint(const std::array<Port *, 4> &otherPorts)
+  : otherPorts(otherPorts)
+{
+
+}
+
+Port *PortHint::operator[](rotate_t direction) const
+{
+  return otherPorts[direction];
+}

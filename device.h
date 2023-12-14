@@ -34,7 +34,7 @@ private:
 class DeviceFactory {
 public:
   explicit DeviceFactory(int speed);
-  virtual Device *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory = nullptr) = 0;
+  virtual Device *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory = nullptr) = 0;
 protected:
   int speed();
   void setSpeed(int speed);
@@ -66,7 +66,7 @@ public:
   explicit MinerFactory(int speed = Miner::MINER_SPEED);
 
   // DeviceFactory interface
-  Miner *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Miner *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Belt: public Device {
@@ -91,7 +91,7 @@ public:
   explicit BeltFactory(int speed = Belt::BELT_SPEED);
 
   // DeviceFactory interface
-  Belt *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Belt *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Cutter: public Device {
@@ -117,7 +117,7 @@ public:
   explicit CutterFactory(int speed = Cutter::CUTTER_SPEED);
 
   // DeviceFactory interface
-  Cutter *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Cutter *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Rotator: public Device {
@@ -141,7 +141,7 @@ public:
   explicit RotatorFactory(int speed = Rotator::ROTATOR_SPEED);
 
   // DeviceFactory interface
-  Rotator *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Rotator *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Mixer: public Device {
@@ -166,7 +166,7 @@ public:
   explicit MixerFactory(int speed = Rotator::ROTATOR_SPEED);
 
   // DeviceFactory interface
-  Mixer *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Mixer *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Trash: public Device {
@@ -194,7 +194,7 @@ public:
   explicit TrashFactory(int speed = Trash::TRASH_SPEED);
 
   // DeviceFactory interface
-  Trash *createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) override;
+  Trash *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
 };
 
 class Center: public Device {

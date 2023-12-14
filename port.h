@@ -18,7 +18,7 @@ public:
   explicit InputPort();
   ~InputPort();
   // interface for device
-  bool ready();
+  bool ready() const;
   const Item *receive();
 
   // Port interface
@@ -35,10 +35,10 @@ public:
   ~OutputPort();
   // interface for device
   bool send(const Item *item);
-  bool ready();
+  bool ready() const;
   const Item *getBuffer();
   // interface for otherPort
-  bool valid();
+  bool valid() const;
   const Item *transmit();
 
   // Port interface
@@ -48,6 +48,15 @@ public:
 private:
   const Item *buffer;
   InputPort *otherPort;
+};
+
+class PortHint {
+public:
+  PortHint(const std::array<Port *, 4> &otherPorts);
+  Port *operator[](rotate_t direction) const;
+
+private:
+  const std::array<Port *, 4> otherPorts;
 };
 
 #endif // PORT_H

@@ -30,7 +30,7 @@ GameState::GameState(QGraphicsScene *scene, QMainWindow *parent)
     col.resize(TILES_Y, {});
   }
 
-  // C++ grammer check
+  // cpp grammer check
   assert(portMap_[0][0][3] == nullptr);
 
   startTimer(1000 / FPS);
@@ -222,6 +222,35 @@ void GameState::shiftSelector(rotate_t d) {
   selector->ensureVisible();
 }
 
+QList<PortHint> GameState::getPortHint(QPoint base, rotate_t rotate, const QList<QPoint> &blocks)
+{
+  QList<PortHint> hints;
+  for (auto p: blocks) {
+    std::array<Port *, 4> ports = {};
+    // cpp grammar check
+    assert(ports[0] == nullptr);
+    assert(ports[1] == nullptr);
+    assert(ports[2] == nullptr);
+    assert(ports[3] == nullptr);
+
+    QPoint realp = mapToMap(p, base, rotate);
+
+    for (int d = 0; d < 4; d ++) {
+      // out-of-shape check
+      QPoint np = p + QPoint(dx[d], dy[d]);
+      if (blocks.contains(np))
+        continue;
+
+      rotate_t r = rotate_t((rotate + d)%4);
+      ports[d] = otherPort(realp, r);
+    }
+
+    hints.push_back(PortHint(ports));
+  }
+
+  return hints;
+}
+
 Selector::Selector(QObject *parent)
     : QObject(parent), x(0), y(0), path_({QPoint(0, 0)}) {}
 
@@ -371,6 +400,7 @@ void GameState::keyReleaseEvent(QKeyEvent *e) {
         return;
       }
       ItemFactory *ground = groundMap(base);
+      QList<PortHint> hints = getPortHint(base, rotate, selector->path());
       Device *device = deviceFactory->createDevice(selector->path(), ground);
       selector->clear();
       if (device == nullptr) {

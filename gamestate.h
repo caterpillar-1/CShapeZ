@@ -73,6 +73,7 @@ private: // helper functions
   Port *otherPort(QPoint p, rotate_t r);
   void moveSelector(rotate_t d);
   void shiftSelector(rotate_t d);
+  QList<PortHint> getPortHint(QPoint base, rotate_t rotate, const QList<QPoint> &blocks);
 
 private: // states
   /* GUI elements */

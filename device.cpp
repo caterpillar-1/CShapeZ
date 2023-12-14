@@ -18,7 +18,7 @@ void Device::advance(int phase) {
 }
 
 void Device::setSpeed(int speed) {
-  // sanity check, bound: [1, 10) s
+  // sanity check, bound: [1/FPS, 10) s
   assert(speed >= 1 && speed < 10 * FPS);
   this->speed = speed;
 }
@@ -33,8 +33,8 @@ QRectF Device::boundingRect() const {
     ymin = std::min(ymin, p.y());
     ymax = std::max(ymax, p.y());
   }
-  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax-xmin+1)*L,
-                (ymax-ymin+1)*L);
+  return QRectF(xmin * L - L / 2, ymin * L - L / 2, (xmax - xmin + 1) * L,
+                (ymax - ymin + 1) * L);
 }
 
 QPainterPath Device::shape() const {
@@ -154,7 +154,7 @@ void Trash::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
   painter->drawRect(-L / 2, -L / 2, L, L);
-  painter->drawText(QPoint(-L/2, 0), "Trash");
+  painter->drawText(QPoint(-L / 2, 0), "Trash");
   painter->restore();
 }
 
@@ -219,22 +219,25 @@ int DeviceFactory::speed() { return speed_; }
 
 void DeviceFactory::setSpeed(int speed) { speed_ = speed; }
 
-MinerFactory::MinerFactory(int speed)
-    : DeviceFactory(speed) {
-}
+MinerFactory::MinerFactory(int speed) : DeviceFactory(speed) {}
 
-Miner *MinerFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+Miner *MinerFactory::createDevice(const QList<QPoint> &blocks,
+                                  const QList<PortHint> &hints,
+                                  ItemFactory *itemFactory) {
   return new Miner(itemFactory, speed());
 }
 
 BeltFactory::BeltFactory(int speed) : DeviceFactory(speed) {}
 
-bool operator<(const QPoint& a, const QPoint& b) {
-  if (a.x() != b.x()) return a.x() < b.x();
+bool operator<(const QPoint &a, const QPoint &b) {
+  if (a.x() != b.x())
+    return a.x() < b.x();
   return a.y() < b.y();
 }
 
-Belt *BeltFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
+                                const QList<PortHint> &hints,
+                                ItemFactory *itemFactory) {
   assert(blocks.size() >= 1);
   std::set<QPoint> points;
   if (blocks.size() > 1) {
@@ -262,19 +265,19 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFa
 
 TrashFactory::TrashFactory(int speed) : DeviceFactory(speed) {}
 
-Trash *TrashFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory) {
+Trash *TrashFactory::createDevice(const QList<QPoint> &blocks,
+                                  const QList<PortHint> &hints,
+                                  ItemFactory *itemFactory) {
   return new Trash(speed());
 }
 
-static DeviceFactory *globalDeviceFactories[] = {
-  new MinerFactory(),
-  new BeltFactory(),
-  new CutterFactory(),
-  new MixerFactory(),
-  new RotatorFactory(),
-  new TrashFactory(),
-  nullptr
-};
+static DeviceFactory *globalDeviceFactories[] = {new MinerFactory(),
+                                                 new BeltFactory(),
+                                                 new CutterFactory(),
+                                                 new MixerFactory(),
+                                                 new RotatorFactory(),
+                                                 new TrashFactory(),
+                                                 nullptr};
 
 DeviceFactory *getDeviceFactory(device_id_t id) {
   assert(id < DEV_NONE);
@@ -284,35 +287,31 @@ DeviceFactory *getDeviceFactory(device_id_t id) {
   return globalDeviceFactories[id];
 }
 
-Cutter::Cutter(int speed)
-  : Device(speed, { {0, 0}, {0, 1} }), stall(false)
-{
+Cutter::Cutter(int speed) : Device(speed, {{0, 0}, {0, 1}}), stall(false) {}
 
-}
-
-void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
-{
+void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                   QWidget *widget) {
   painter->save();
-  painter->drawRect(-L/2, -L/2, L, 2*L);
-  painter->drawText(QPoint(-L/2,0), "Cutter");
+  painter->drawRect(-L / 2, -L / 2, L, 2 * L);
+  painter->drawText(QPoint(-L / 2, 0), "Cutter");
   painter->restore();
 }
 
-const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Cutter::ports()
-{
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Cutter::ports() {
   return {
-    { &in, { {0, 0}, R180 }},
-    { &outU, {{0, 0}, R0 }},
-    { &outL, {{0, 1}, R0 }},
+      {&in, {{0, 0}, R180}},
+      {&outU, {{0, 0}, R0}},
+      {&outL, {{0, 1}, R0}},
   };
 }
 
-void Cutter::next()
-{
-  if (stall) return;
+void Cutter::next() {
+  if (stall)
+    return;
   if (outU.ready() && outL.ready()) {
     const Item *item = in.receive();
-    if (!item) return;
+    if (!item)
+      return;
     const Mine *mine = dynamic_cast<const Mine *>(item);
     if (!mine) {
       stall = true;
@@ -324,43 +323,36 @@ void Cutter::next()
   }
 }
 
-CutterFactory::CutterFactory(int speed)
-  : DeviceFactory(speed)
-{
+CutterFactory::CutterFactory(int speed) : DeviceFactory(speed) {}
 
-}
-
-Cutter *CutterFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
-{
+Cutter *CutterFactory::createDevice(const QList<QPoint> &blocks,
+                                    const QList<PortHint> &hints,
+                                    ItemFactory *itemFactory) {
   return new Cutter(speed());
 }
 
-Rotator::Rotator(int speed)
-  : Device(speed)
-{
-}
+Rotator::Rotator(int speed) : Device(speed) {}
 
-void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
-{
+void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                    QWidget *widget) {
   painter->save();
-  painter->drawRect(-L/2, -L/2, L, L);
-  painter->drawText(QPoint(-L/2, 0), "Rotator");
+  painter->drawRect(-L / 2, -L / 2, L, L);
+  painter->drawText(QPoint(-L / 2, 0), "Rotator");
   painter->restore();
 }
 
-const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Rotator::ports()
-{
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Rotator::ports() {
   return {
-    { &in, {{0, 0}, R180}},
-    { &out, {{0, 0}, R0 }},
+      {&in, {{0, 0}, R180}},
+      {&out, {{0, 0}, R0}},
   };
 }
 
-void Rotator::next()
-{
+void Rotator::next() {
   if (out.ready()) {
     auto item = in.receive();
-    if (!item) return;
+    if (!item)
+      return;
     auto mine = dynamic_cast<const Mine *>(item);
     if (mine) {
       out.send(mine->rotateR());
@@ -371,42 +363,33 @@ void Rotator::next()
   }
 }
 
-RotatorFactory::RotatorFactory(int speed)
-  : DeviceFactory(speed)
-{
+RotatorFactory::RotatorFactory(int speed) : DeviceFactory(speed) {}
 
-}
-
-Rotator *RotatorFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
-{
+Rotator *RotatorFactory::createDevice(const QList<QPoint> &blocks,
+                                      const QList<PortHint> &hints,
+                                      ItemFactory *itemFactory) {
   return new Rotator(speed());
 }
 
-Mixer::Mixer(int speed)
-  : Device(speed, {{0, 0}, {1, 0}}), stall(false)
-{
+Mixer::Mixer(int speed) : Device(speed, {{0, 0}, {1, 0}}), stall(false) {}
 
-}
-
-void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
-{
+void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                  QWidget *widget) {
   painter->save();
-  painter->drawRect(-L/2, -L/2, 2*L, L);
-  painter->drawText(QPoint(-L/2, 0), "Mixer");
+  painter->drawRect(-L / 2, -L / 2, 2 * L, L);
+  painter->drawText(QPoint(-L / 2, 0), "Mixer");
   painter->restore();
 }
 
-const QList<std::pair<Port *, std::pair<QPoint, rotate_t> > > Mixer::ports()
-{
+const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Mixer::ports() {
   return {
-    { &inMine, {{0, 0}, R180}},
-    { &inTrait, {{0, 0}, R90}},
-    { &out, {{0, 1}, R0}},
+      {&inMine, {{0, 0}, R180}},
+      {&inTrait, {{0, 0}, R90}},
+      {&out, {{0, 1}, R0}},
   };
 }
 
-void Mixer::next()
-{
+void Mixer::next() {
   if (!(inMine.ready() && inTrait.ready() && out.ready()))
     return;
   const Item *itemMine = inMine.receive();
@@ -425,13 +408,10 @@ void Mixer::next()
   delete itemTrait;
 }
 
-MixerFactory::MixerFactory(int speed)
-  : DeviceFactory(speed)
-{
+MixerFactory::MixerFactory(int speed) : DeviceFactory(speed) {}
 
-}
-
-Mixer *MixerFactory::createDevice(const QList<QPoint> &blocks, ItemFactory *itemFactory)
-{
+Mixer *MixerFactory::createDevice(const QList<QPoint> &blocks,
+                                  const QList<PortHint> &hints,
+                                  ItemFactory *itemFactory) {
   return new Mixer(speed());
 }
