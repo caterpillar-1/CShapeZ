@@ -401,7 +401,7 @@ void GameState::keyReleaseEvent(QKeyEvent *e) {
       }
       ItemFactory *ground = groundMap(base);
       QList<PortHint> hints = getPortHint(base, rotate, selector->path());
-      Device *device = deviceFactory->createDevice(selector->path(), ground);
+      Device *device = deviceFactory->createDevice(selector->path(), hints, ground);
       selector->clear();
       if (device == nullptr) {
         qCritical() << "create device failed.";

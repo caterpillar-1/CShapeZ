@@ -53,10 +53,12 @@ private:
 class PortHint {
 public:
   PortHint(const std::array<Port *, 4> &otherPorts);
+  PortHint(const PortHint &o);
+  const PortHint &operator=(const PortHint &o);
   Port *operator[](rotate_t direction) const;
 
 private:
-  const std::array<Port *, 4> otherPorts;
+  std::array<Port *, 4> otherPorts;
 };
 
 #endif // PORT_H

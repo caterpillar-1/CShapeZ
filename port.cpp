@@ -90,6 +90,18 @@ PortHint::PortHint(const std::array<Port *, 4> &otherPorts)
 
 }
 
+PortHint::PortHint(const PortHint &o)
+  : otherPorts(o.otherPorts)
+{
+
+}
+
+const PortHint &PortHint::operator=(const PortHint &o)
+{
+  otherPorts = o.otherPorts;
+  return *this;
+}
+
 Port *PortHint::operator[](rotate_t direction) const
 {
   return otherPorts[direction];

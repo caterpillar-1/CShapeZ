@@ -92,8 +92,54 @@ void Miner::next() {
   }
 }
 
-Belt::Belt(int speed, const QList<QPoint> &blocks) : Device(speed, blocks) {
-  buffer.resize(blocks.size(), nullptr);
+Belt::Belt(const QList<QPoint> &blocks, rotate_t inDirection,
+           rotate_t outDirection, int speed)
+    : Device(speed, blocks), inDirection(inDirection), outDirection(outDirection) {
+  buffer.resize(blocks.size() - 1, nullptr);
+  direction.resize(blocks.size());
+  turn.resize(blocks.size());
+
+  direction.back() = outDirection;
+  for (int i = blocks.size() - 2; i >= 0; i --) {
+    QPoint p = blocks[i], np = blocks[i+1];
+    for (int d = 0; d < 4; d ++) {
+      if (p + QPoint(dx[d], dy[d]) == np) {
+        direction[i] = rotate_t(d);
+        break;
+      }
+    }
+  }
+
+  if (inDirection == direction.front()) {
+    turn.front() = PASS_THROUGH;
+  } else if (rotateL(inDirection) == direction.front()) {
+    turn.front() = TURN_LEFT;
+  } else if (rotateR(inDirection) == direction.front()) {
+    turn.front() = TURN_RIGHT;
+  } else {
+    assert(false);
+  }
+
+  for (int i = 1; i < blocks.size(); i ++) {
+    QPoint pp = blocks[i-1], p = blocks[i];
+    rotate_t inD;
+    for (int d = 0; d < 4; d ++) {
+      if (pp + dp[d] == p) {
+        inD = rotate_t(d);
+        break;
+      }
+    }
+
+    if (inD == direction[i]) {
+      turn[i] = PASS_THROUGH;
+    } else if (rotateL(inD) == direction[i]) {
+      turn[i] = TURN_LEFT;
+    } else if (rotateR(inD) == direction[i]) {
+      turn[i] = TURN_RIGHT;
+    } else {
+      assert(false);
+    }
+  }
 }
 
 void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
@@ -110,40 +156,49 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     painter->save();
     int x = blocks()[i].x(), y = blocks()[i].y();
     painter->translate(x * L, y * L);
+    painter->rotate(-direction[i]*90);
     painter->save();
     painter->drawPolygon(points, 4);
     painter->restore();
-    if (buffer[i]) {
-      buffer[i]->paint(painter);
+    if (i == blocks().size() - 1) {
+      if (out.getBuffer()) {
+        out.getBuffer()->paint(painter);
+      }
+    } else {
+      if (buffer[i]) {
+        buffer[i]->paint(painter);
+      }
     }
+
     painter->restore();
   }
   painter->restore();
 }
 
 const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Belt::ports() {
-  QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
-  ret.append({
-      {static_cast<Port *>(&in), {blocks().front(), R180}},
-      {static_cast<Port *>(&out), {blocks().back(), R0}},
-  });
-  return ret;
+  return {{&in, {blocks().front(), rotate_t((inDirection + 2) % 4)}},
+          {&out, {blocks().back(), outDirection}}};
 }
 
 void Belt::next() {
-  if (buffer.back()) {
-    if (out.send(buffer.back())) {
+  if (!buffer.empty()) {
+    if (buffer.back() && out.ready()) {
+      out.send(buffer.back());
       buffer.back() = nullptr;
     }
-  }
-  for (int i = buffer.size() - 2; i >= 0; i--) {
-    if (buffer[i + 1] == nullptr) {
-      buffer[i + 1] = buffer[i];
-      buffer[i] = nullptr;
+    for (int i = buffer.size() - 2; i >= 0; i --) {
+      if (buffer[i+1] == nullptr) {
+        buffer[i+1] = buffer[i];
+        buffer[i] = nullptr;
+      }
     }
-  }
-  if (buffer[0] == nullptr) {
-    buffer[0] = in.receive();
+    if (buffer.front() == nullptr && in.ready()) {
+      buffer.front() = in.receive();
+    }
+  } else {
+    if (out.ready() && in.ready()) {
+      out.send(in.receive());
+    }
   }
   update();
 }
@@ -239,6 +294,8 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
                                 const QList<PortHint> &hints,
                                 ItemFactory *itemFactory) {
   assert(blocks.size() >= 1);
+  assert(hints.size() == blocks.size());
+  // no overlap or blank check
   std::set<QPoint> points;
   if (blocks.size() > 1) {
     QPoint p = blocks.front();
@@ -260,7 +317,27 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
       p = np;
     }
   }
-  return new Belt(speed(), blocks);
+
+  rotate_t inDirection = R0, outDirection = R0;
+  for (int d = 0; d < 4; d ++) {
+    Port *p = hints.front()[rotate_t(d)];
+    if (!p) continue;
+    if (dynamic_cast<InputPort *>(p)) {
+      inDirection = rotate_t((d+2)%4);
+      break;
+    }
+  }
+
+  for (int d = 0; d < 4; d ++) {
+    Port *p = hints.back()[rotate_t(d)];
+    if (!p) continue;
+    if (dynamic_cast<InputPort *>(p)) {
+      outDirection = rotate_t(d);
+      break;
+    }
+  }
+
+  return new Belt(blocks, inDirection, outDirection);
 }
 
 TrashFactory::TrashFactory(int speed) : DeviceFactory(speed) {}

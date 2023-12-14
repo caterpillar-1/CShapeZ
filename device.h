@@ -4,21 +4,23 @@
 #include "port.h"
 #include <QtWidgets>
 
-enum device_id_t { MINER, BELT, CUTTER, MIXER, ROTATOR, TRASH, DEV_NONE};
+enum device_id_t { MINER, BELT, CUTTER, MIXER, ROTATOR, TRASH, DEV_NONE };
 
-class Device : public QObject, public QGraphicsItem
-{
+class Device : public QObject, public QGraphicsItem {
   Q_OBJECT
 public:
-  explicit Device(int speed, const QList<QPoint>& blocks = QList<QPoint>({QPoint(0, 0)}));
-  const QList<QPoint>& blocks() const;
-  virtual const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() = 0;
+  explicit Device(int speed,
+                  const QList<QPoint> &blocks = QList<QPoint>({QPoint(0, 0)}));
+  const QList<QPoint> &blocks() const;
+  virtual const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>>
+  ports() = 0;
 
   // QGraphicsItem interface
 public:
   QRectF boundingRect() const override;
   QPainterPath shape() const override;
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   void advance(int phase) override final; // convert timerEvent to next() calls
   void setSpeed(int speed);
 
@@ -34,7 +36,10 @@ private:
 class DeviceFactory {
 public:
   explicit DeviceFactory(int speed);
-  virtual Device *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory = nullptr) = 0;
+  virtual Device *createDevice(const QList<QPoint> &blocks,
+                               const QList<PortHint> &hints,
+                               ItemFactory *itemFactory = nullptr) = 0;
+
 protected:
   int speed();
   void setSpeed(int speed);
@@ -45,12 +50,13 @@ private:
 
 DeviceFactory *getDeviceFactory(device_id_t id);
 
-class Miner: public Device {
+class Miner : public Device {
   Q_OBJECT
 public:
   static constexpr int MINER_SPEED = 120;
   explicit Miner(ItemFactory *factory, int speed = MINER_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 protected:
@@ -61,21 +67,26 @@ private:
   OutputPort out;
 };
 
-class MinerFactory: public DeviceFactory {
+class MinerFactory : public DeviceFactory {
 public:
   explicit MinerFactory(int speed = Miner::MINER_SPEED);
 
   // DeviceFactory interface
-  Miner *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Miner *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints,
+                      ItemFactory *itemFactory) override;
 };
 
-class Belt: public Device {
+class Belt : public Device {
   Q_OBJECT
 public:
   static constexpr int BELT_SPEED = 60;
-  explicit Belt(int speed = BELT_SPEED, const QList<QPoint> &blocks = QList<QPoint>({QPoint(0, 0)}));
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  explicit Belt(const QList<QPoint> &blocks, rotate_t inDirection,
+                rotate_t outDirection, int speed = BELT_SPEED);
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
+
+  enum turn_t { PASS_THROUGH, TURN_LEFT, TURN_RIGHT };
 
 protected:
   void next() override;
@@ -83,23 +94,29 @@ protected:
 private:
   InputPort in;
   OutputPort out;
+
+  rotate_t inDirection, outDirection;
+  std::vector<rotate_t> direction;
+  std::vector<turn_t> turn;
   std::vector<const Item *> buffer;
 };
 
-class BeltFactory: public DeviceFactory {
+class BeltFactory : public DeviceFactory {
 public:
   explicit BeltFactory(int speed = Belt::BELT_SPEED);
 
   // DeviceFactory interface
-  Belt *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Belt *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints,
+                     ItemFactory *itemFactory) override;
 };
 
-class Cutter: public Device {
+class Cutter : public Device {
   Q_OBJECT
 public:
   static constexpr int CUTTER_SPEED = 240;
   explicit Cutter(int speed = CUTTER_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 protected:
@@ -112,20 +129,23 @@ private:
   bool stall;
 };
 
-class CutterFactory: public DeviceFactory {
+class CutterFactory : public DeviceFactory {
 public:
   explicit CutterFactory(int speed = Cutter::CUTTER_SPEED);
 
   // DeviceFactory interface
-  Cutter *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Cutter *createDevice(const QList<QPoint> &blocks,
+                       const QList<PortHint> &hints,
+                       ItemFactory *itemFactory) override;
 };
 
-class Rotator: public Device {
+class Rotator : public Device {
   Q_OBJECT
 public:
   static constexpr int ROTATOR_SPEED = 90;
   explicit Rotator(int speed = ROTATOR_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 protected:
@@ -136,20 +156,23 @@ private:
   OutputPort out;
 };
 
-class RotatorFactory: public DeviceFactory {
+class RotatorFactory : public DeviceFactory {
 public:
   explicit RotatorFactory(int speed = Rotator::ROTATOR_SPEED);
 
   // DeviceFactory interface
-  Rotator *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Rotator *createDevice(const QList<QPoint> &blocks,
+                        const QList<PortHint> &hints,
+                        ItemFactory *itemFactory) override;
 };
 
-class Mixer: public Device {
+class Mixer : public Device {
   Q_OBJECT
 public:
   static constexpr int MIXER_SPEED = 240;
   explicit Mixer(int speed = MIXER_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 protected:
@@ -161,20 +184,22 @@ private:
   bool stall;
 };
 
-class MixerFactory: public DeviceFactory {
+class MixerFactory : public DeviceFactory {
 public:
   explicit MixerFactory(int speed = Rotator::ROTATOR_SPEED);
 
   // DeviceFactory interface
-  Mixer *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Mixer *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints,
+                      ItemFactory *itemFactory) override;
 };
 
-class Trash: public Device {
+class Trash : public Device {
   Q_OBJECT
 public:
   static constexpr int TRASH_SPEED = 60;
   explicit Trash(int speed = TRASH_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 protected:
@@ -182,27 +207,29 @@ protected:
 
 private:
   QList<std::pair<InputPort, std::pair<QPoint, rotate_t>>> in = {
-    { InputPort(), { QPoint(0, 0), R0 } },
-    { InputPort(), { QPoint(0, 0), R90 } },
-    { InputPort(), { QPoint(0, 0), R180 } },
-    { InputPort(), { QPoint(0, 0), R270 } },
+      {InputPort(), {QPoint(0, 0), R0}},
+      {InputPort(), {QPoint(0, 0), R90}},
+      {InputPort(), {QPoint(0, 0), R180}},
+      {InputPort(), {QPoint(0, 0), R270}},
   };
 };
 
-class TrashFactory: public DeviceFactory {
+class TrashFactory : public DeviceFactory {
 public:
   explicit TrashFactory(int speed = Trash::TRASH_SPEED);
 
   // DeviceFactory interface
-  Trash *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints, ItemFactory *itemFactory) override;
+  Trash *createDevice(const QList<QPoint> &blocks, const QList<PortHint> &hints,
+                      ItemFactory *itemFactory) override;
 };
 
-class Center: public Device {
+class Center : public Device {
   Q_OBJECT
 public:
   static constexpr int CENTER_SPEED = 10;
   explicit Center(int speed = CENTER_SPEED);
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
 signals:
@@ -213,22 +240,14 @@ protected:
 
 private:
   QList<std::pair<InputPort, std::pair<QPoint, rotate_t>>> in = {
-    { InputPort(), { QPoint(0, 0), R90} },
-    { InputPort(), { QPoint(1, 0), R90} },
-    { InputPort(), { QPoint(2, 0), R90} },
-    { InputPort(), { QPoint(3, 0), R90} },
-    { InputPort(), { QPoint(0, 0), R180} },
-    { InputPort(), { QPoint(0, 1), R180} },
-    { InputPort(), { QPoint(0, 2), R180} },
-    { InputPort(), { QPoint(0, 3), R180} },
-    { InputPort(), { QPoint(3, 0), R0} },
-    { InputPort(), { QPoint(3, 1), R0} },
-    { InputPort(), { QPoint(3, 2), R0} },
-    { InputPort(), { QPoint(3, 3), R0} },
-    { InputPort(), { QPoint(0, 3), R270} },
-    { InputPort(), { QPoint(1, 3), R270} },
-    { InputPort(), { QPoint(2, 3), R270} },
-    { InputPort(), { QPoint(3, 3), R270} },
+      {InputPort(), {QPoint(0, 0), R90}},  {InputPort(), {QPoint(1, 0), R90}},
+      {InputPort(), {QPoint(2, 0), R90}},  {InputPort(), {QPoint(3, 0), R90}},
+      {InputPort(), {QPoint(0, 0), R180}}, {InputPort(), {QPoint(0, 1), R180}},
+      {InputPort(), {QPoint(0, 2), R180}}, {InputPort(), {QPoint(0, 3), R180}},
+      {InputPort(), {QPoint(3, 0), R0}},   {InputPort(), {QPoint(3, 1), R0}},
+      {InputPort(), {QPoint(3, 2), R0}},   {InputPort(), {QPoint(3, 3), R0}},
+      {InputPort(), {QPoint(0, 3), R270}}, {InputPort(), {QPoint(1, 3), R270}},
+      {InputPort(), {QPoint(2, 3), R270}}, {InputPort(), {QPoint(3, 3), R270}},
   };
 };
 
