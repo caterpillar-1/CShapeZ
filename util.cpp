@@ -10,3 +10,5 @@ rotate_t rotateL(rotate_t d) {
 rotate_t rotateR(rotate_t d) {
   return rotate_t((d+3)%4);
 }
+
+extern QRandomGenerator &rng = *QRandomGenerator::global();

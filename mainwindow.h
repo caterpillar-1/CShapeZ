@@ -19,11 +19,13 @@ public slots:
   void deviceChangeEvent(device_id_t id);
 
 private:
-  QGraphicsScene *scene;
+  GameState *game;
+
+  Scene *scene;
   QGraphicsView *view;
   QList<QAction *> deviceButtons;
 
-  GameState *game;
+
 };
 
 #endif // MAINWINDOW_H

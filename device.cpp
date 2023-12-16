@@ -6,6 +6,12 @@ Device::Device(int speed, const QList<QPoint> &blocks) : blocks_(blocks) {
   setSpeed(speed);
 }
 
+void Device::save(QDataStream &out)
+{
+  qDebug() << "Saveing base:" << speed << frameCount << blocks_;
+  out << speed << frameCount << blocks_;
+}
+
 const QList<QPoint> &Device::blocks() const { return blocks_; }
 
 void Device::advance(int phase) {
@@ -21,6 +27,13 @@ void Device::setSpeed(int speed) {
   // sanity check, bound: [1/FPS, 10) s
   assert(speed >= 1 && speed < 10 * FPS);
   this->speed = speed;
+}
+
+Device::Device(QDataStream &in)
+{
+  in >> speed >> frameCount >> blocks_;
+  setSpeed(speed);
+  assert(blocks_.size() >= 1);
 }
 
 QRectF Device::boundingRect() const {
@@ -65,7 +78,17 @@ void Device::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 }
 
 Miner::Miner(ItemFactory *factory, int speed)
-    : Device(speed), factory(factory) {}
+  : Device(speed), factory(factory) {}
+
+void Miner::save(QDataStream &out)
+{
+  Device::save(out);
+}
+
+void Miner::restore(ItemFactory *f)
+{
+  factory = f;
+}
 
 void Miner::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
@@ -81,6 +104,12 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Miner::ports() {
   QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
   ret.push_back({static_cast<Port *>(&out), {QPoint(0, 0), R0}});
   return ret;
+}
+
+Miner::Miner(QDataStream &in)
+  : Device(in)
+{
+
 }
 
 void Miner::next() {
@@ -142,10 +171,25 @@ Belt::Belt(const QList<QPoint> &blocks, rotate_t inDirection,
   }
 }
 
+void Belt::save(QDataStream &out)
+{
+  Device::save(out);
+  out << inDirection << outDirection;
+
+  int n = blocks().size();
+  out << n;
+
+  for (int i = 0; i < n; i ++) {
+    out << direction[i];
+  }
+  for (int i = 0; i < n; i ++) {
+    out << turn[i];
+  }
+}
+
 void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                  QWidget *widget) {
   painter->save();
-  painter->setBrush(QBrush(Qt::gray));
   static const QPoint points[4] = {
       {-L / 3, -L / 3},
       {-L / 4, 0},
@@ -158,6 +202,7 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     painter->translate(x * L, y * L);
     painter->rotate(-direction[i]*90);
     painter->save();
+    painter->setBrush(QBrush(Qt::gray));
     painter->drawPolygon(points, 4);
     painter->restore();
     if (i == blocks().size() - 1) {
@@ -177,7 +222,26 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 
 const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Belt::ports() {
   return {{&in, {blocks().front(), rotate_t((inDirection + 2) % 4)}},
-          {&out, {blocks().back(), outDirection}}};
+    {&out, {blocks().back(), outDirection}}};
+}
+
+Belt::Belt(QDataStream &in)
+  : Device(in)
+{
+  in >> inDirection >> outDirection;
+
+  int n;
+  in >> n;
+  assert(n > 0);
+  direction.resize(n);
+  turn.resize(n);
+  for (auto &x: direction) {
+    in >> x;
+  }
+  for (auto &x: turn) {
+    in >> x;
+  }
+  buffer.resize(n - 1);
 }
 
 void Belt::next() {
@@ -205,6 +269,11 @@ void Belt::next() {
 
 Trash::Trash(int speed) : Device(speed) {}
 
+void Trash::save(QDataStream &out)
+{
+  Device::save(out);
+}
+
 void Trash::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
@@ -219,6 +288,12 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Trash::ports() {
     ret.push_back({&e.first, e.second});
   }
   return ret;
+}
+
+Trash::Trash(QDataStream &in)
+  : Device(in)
+{
+
 }
 
 void Trash::next() {
@@ -319,21 +394,46 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
   }
 
   rotate_t inDirection = R0, outDirection = R0;
-  for (int d = 0; d < 4; d ++) {
-    Port *p = hints.front()[rotate_t(d)];
-    if (!p) continue;
-    if (dynamic_cast<InputPort *>(p)) {
-      inDirection = rotate_t((d+2)%4);
-      break;
-    }
-  }
 
-  for (int d = 0; d < 4; d ++) {
-    Port *p = hints.back()[rotate_t(d)];
-    if (!p) continue;
-    if (dynamic_cast<InputPort *>(p)) {
-      outDirection = rotate_t(d);
-      break;
+  if (blocks.size() > 1) {
+    for (int d = 0; d < 4; d++) {
+      Port *p = hints.front()[rotate_t(d)];
+      if (!p)
+        continue;
+      if (dynamic_cast<OutputPort *>(p)) {
+        inDirection = rotate_t((d + 2) % 4);
+        break;
+      }
+    }
+
+    for (int d = 0; d < 4; d++) {
+      Port *p = hints.back()[rotate_t(d)];
+      if (!p)
+        continue;
+      if (dynamic_cast<InputPort *>(p)) {
+        outDirection = rotate_t(d);
+        break;
+      }
+    }
+
+    for (int d = 0; d < 4; d ++) {
+      const QPoint &a = blocks[0], &b = blocks[1];
+      if (a + dp[d] == b) {
+        if (inDirection == (d + 2) % 4) {
+          inDirection = rotate_t(d);
+        }
+        break;
+      }
+    }
+
+    for (int d = 0; d < 4; d ++) {
+      const QPoint &a = blocks[blocks.size() - 2], &b = blocks.back();
+      if (a + dp[d] == b) {
+        if (outDirection == (d + 2) % 4) {
+          outDirection = rotate_t(d);
+        }
+        break;
+      }
     }
   }
 
@@ -366,6 +466,12 @@ DeviceFactory *getDeviceFactory(device_id_t id) {
 
 Cutter::Cutter(int speed) : Device(speed, {{0, 0}, {0, 1}}), stall(false) {}
 
+void Cutter::save(QDataStream &out)
+{
+  Device::save(out);
+  out << stall;
+}
+
 void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                    QWidget *widget) {
   painter->save();
@@ -380,6 +486,12 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Cutter::ports() {
       {&outU, {{0, 0}, R0}},
       {&outL, {{0, 1}, R0}},
   };
+}
+
+Cutter::Cutter(QDataStream &in)
+  : Device(in)
+{
+  in >> stall;
 }
 
 void Cutter::next() {
@@ -410,6 +522,11 @@ Cutter *CutterFactory::createDevice(const QList<QPoint> &blocks,
 
 Rotator::Rotator(int speed) : Device(speed) {}
 
+void Rotator::save(QDataStream &out)
+{
+  Device::save(out);
+}
+
 void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                     QWidget *widget) {
   painter->save();
@@ -423,6 +540,11 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Rotator::ports() {
       {&in, {{0, 0}, R180}},
       {&out, {{0, 0}, R0}},
   };
+}
+
+Rotator::Rotator(QDataStream &in)
+  : Device(in)
+{
 }
 
 void Rotator::next() {
@@ -450,6 +572,12 @@ Rotator *RotatorFactory::createDevice(const QList<QPoint> &blocks,
 
 Mixer::Mixer(int speed) : Device(speed, {{0, 0}, {1, 0}}), stall(false) {}
 
+void Mixer::save(QDataStream &out)
+{
+  Device::save(out);
+  out << stall;
+}
+
 void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
@@ -462,8 +590,14 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Mixer::ports() {
   return {
       {&inMine, {{0, 0}, R180}},
       {&inTrait, {{0, 0}, R90}},
-      {&out, {{0, 1}, R0}},
+      {&out, {{1, 0}, R0}},
   };
+}
+
+Mixer::Mixer(QDataStream &in)
+  : Device(in)
+{
+  in >> stall;
 }
 
 void Mixer::next() {
@@ -491,4 +625,61 @@ Mixer *MixerFactory::createDevice(const QList<QPoint> &blocks,
                                   const QList<PortHint> &hints,
                                   ItemFactory *itemFactory) {
   return new Mixer(speed());
+}
+
+// serialize
+void saveDevice(QDataStream &out, Device *dev) {
+  qDebug() << "saveDevice";
+  if (!dev) {
+    out << QChar('N');
+    return;
+  } else if (dynamic_cast<Miner *>(dev)) {
+    out << QChar('M');
+  } else if (dynamic_cast<Belt *>(dev)) {
+    out << QChar('B');
+  } else if (dynamic_cast<Cutter *>(dev)) {
+    out << QChar('C');
+  } else if (dynamic_cast<Mixer *>(dev)) {
+    out << QChar('X');
+  } else if (dynamic_cast<Rotator *>(dev)) {
+    out << QChar('R');
+  } else if (dynamic_cast<Trash *>(dev)) {
+    out << QChar('T');
+  } else {
+    assert(false);
+  }
+  // its GameState's responsibility to handle Center
+  dev->save(out);
+}
+
+Device *loadDevice(QDataStream &in) {
+  qDebug() << "loadDevice";
+  QChar id;
+  in >> id;
+  qDebug() << "id is " << id << (int)id.toLatin1();
+  if (id == 'N') {
+    return nullptr;
+  } else if (id == 'M') {
+    return new Miner(in);
+  } else if (id == 'B') {
+    return new Belt(in);
+  } else if (id == 'C') {
+    return new Cutter(in);
+  } else if (id == 'X') {
+    return new Mixer(in);
+  } else if (id == 'T') {
+    return new Trash(in);
+  } else if (id == 'R') {
+    return new Rotator(in);
+  } else {
+    assert(false);
+  }
+  // its GameState's responsibility to handle Center
+}
+
+void restoreDevice(Device *dev, ItemFactory *f)
+{
+  if (auto miner = dynamic_cast<Miner *>(dev)) {
+    miner->restore(f);
+  }
 }

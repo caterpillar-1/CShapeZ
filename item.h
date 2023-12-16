@@ -15,12 +15,20 @@ public:
   Item();
 
   virtual void paint(QPainter *painter) const;
+
+  // serialize
+  friend QDataStream &operator<<(QDataStream &out, Item *&item);
+  friend QDataStream &operator>>(QDataStream &in, Item *&item);
 };
 
 class TraitMine: public Item {
 public:
   TraitMine(trait_t trait);
   trait_t getTrait() const;
+
+  // serialize
+  friend QDataStream &operator<<(QDataStream &out, TraitMine *&tmine);
+  friend QDataStream &operator>>(QDataStream &in, TraitMine *&tmine);
 
 private:
   const trait_t trait;
@@ -40,6 +48,10 @@ public:
   // Item interface
   void paint(QPainter *painter) const;
 
+  // serialize
+  friend QDataStream &operator<<(QDataStream &out, Mine *&mine);
+  friend QDataStream &operator>>(QDataStream &in, Mine *&mine);
+
 private:
   const type_t type;
   const shape_t shape;
@@ -49,29 +61,52 @@ private:
 
 class ItemFactory {
 public:
-  virtual Item *createItem() const = 0;
+  ItemFactory();
   virtual ~ItemFactory();
+  virtual Item *createItem() const = 0;
+  virtual QColor color() = 0;
+
+  // serialize
+  explicit ItemFactory(QDataStream &in);
+  virtual void save(QDataStream &out);
 };
 
 class MineFactory: public ItemFactory {
 public:
   explicit MineFactory(type_t type, trait_t trait);
 
+  // serialize
+  explicit MineFactory(QDataStream &in);
+  virtual void save(QDataStream &out) override;
+  QColor color() override;
+
   // ItemFactory interface
 public:
   Mine *createItem() const override;
 private:
-  const type_t type;
-  const trait_t trait;
+  type_t type;
+  trait_t trait;
 };
 
 class TraitFactory: public ItemFactory {
 public:
   explicit TraitFactory(trait_t trait);
 
+  // serialize
+  explicit TraitFactory(QDataStream &in);
+  virtual void save(QDataStream &out) override;
+  QColor color() override;
+
 public:
   TraitMine *createItem() const override;
 private:
-  const trait_t trait;
+  trait_t trait;
 };
+
+ItemFactory *randomItemFactory();
+
+// serialize
+void saveItemFactory(QDataStream &out, ItemFactory *f);
+ItemFactory *loadItemFactory(QDataStream &in);
+
 #endif // ITEM_H

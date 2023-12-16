@@ -24,11 +24,16 @@ public:
   void advance(int phase) override final; // convert timerEvent to next() calls
   void setSpeed(int speed);
 
+  // serialize
+  explicit Device(QDataStream &in);
+  virtual void save(QDataStream &out); // all devices must save Device first
+                                       // (call this function)
+
 protected:
   virtual void next() = 0;
 
 private:
-  const QList<QPoint> blocks_;
+  QList<QPoint> blocks_;
   int speed; // frames per opeartion
   int frameCount;
 };
@@ -59,6 +64,11 @@ public:
              QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
+  // serialize
+  explicit Miner(QDataStream &in);
+  void save(QDataStream &out) override;
+  void restore(ItemFactory *f);
+
 protected:
   void next() override;
 
@@ -87,6 +97,10 @@ public:
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
   enum turn_t { PASS_THROUGH, TURN_LEFT, TURN_RIGHT };
+
+  // serialize
+  explicit Belt(QDataStream &in);
+  void save(QDataStream &out) override;
 
 protected:
   void next() override;
@@ -119,6 +133,10 @@ public:
              QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
+  // serialize
+  explicit Cutter(QDataStream &in);
+  void save(QDataStream &out) override;
+
 protected:
   void next() override;
 
@@ -148,6 +166,10 @@ public:
              QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
+  // serialize
+  explicit Rotator(QDataStream &in);
+  void save(QDataStream &out) override;
+
 protected:
   void next() override;
 
@@ -175,6 +197,10 @@ public:
              QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
 
+  // serialize
+  explicit Mixer(QDataStream &in);
+  void save(QDataStream &out) override;
+
 protected:
   void next() override;
 
@@ -201,6 +227,10 @@ public:
   void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
              QWidget *widget) override;
   const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ports() override;
+
+  // serialize
+  explicit Trash(QDataStream &in);
+  void save(QDataStream &out) override;
 
 protected:
   void next() override;
@@ -250,5 +280,10 @@ private:
       {InputPort(), {QPoint(2, 3), R270}}, {InputPort(), {QPoint(3, 3), R270}},
   };
 };
+
+// serialize
+void saveDevice(QDataStream &out, Device *dev);
+Device *loadDevice(QDataStream &in);
+void restoreDevice(Device *dev, ItemFactory *itemFactory);
 
 #endif // DEVICE_H

@@ -32,21 +32,41 @@ struct DeviceDescription {
   DeviceDescription(int x, int y, rotate_t rotate);
 };
 
-class GameState : public QObject
+class GameState;
+
+class Scene: public QGraphicsScene {
+  Q_OBJECT
+public:
+  explicit Scene(int w, int h, GameState& game, QObject *parent = nullptr);
+
+  // QGraphicsScene interface
+protected:
+  void drawBackground(QPainter *painter, const QRectF &rect) override;
+
+private:
+  const int w, h;
+  GameState &game;
+};
+
+
+class GameState : public QGraphicsScene
 {
   Q_OBJECT
 public:
-  explicit GameState(QGraphicsScene *scene, QMainWindow *parent = nullptr);
+  explicit GameState(int w, int h, Scene *&scene, QMainWindow *parent = nullptr);
   void pause(bool paused);
+
+  // serialize
+  explicit GameState(QDataStream &in, Scene *&scene, QMainWindow *parent = nullptr);
+  void save(QDataStream &out);
 
   // QObject interface
 protected:
   void timerEvent(QTimerEvent *) override;
   bool eventFilter(QObject *object, QEvent *event) override;
 public slots:
-  void keyPressEvent(QKeyEvent *e);
-  void keyReleaseEvent(QKeyEvent *e);
-
+  void keyPressEvent(QKeyEvent *e) override;
+  void keyReleaseEvent(QKeyEvent *e) override;
 
 signals:
   void deviceChangeEvent(device_id_t id);
@@ -74,13 +94,17 @@ private: // helper functions
   void moveSelector(rotate_t d);
   void shiftSelector(rotate_t d);
   QList<PortHint> getPortHint(QPoint base, rotate_t rotate, const QList<QPoint> &blocks);
+  void navieInitMap(int w, int h);
+  void loadMap(QDataStream &in);
 
 private: // states
+  int w, h;
   /* GUI elements */
   // window
   QMainWindow *window;
   // scene
-  QGraphicsScene *scene;
+  friend Scene;
+  Scene *scene;
   // selector
   Selector *selector;
   QPoint base, offset;

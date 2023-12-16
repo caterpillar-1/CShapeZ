@@ -1,42 +1,104 @@
 #include "gamestate.h"
 
-GameState::GameState(QGraphicsScene *scene, QMainWindow *parent)
-    : QObject(parent), window(parent), scene(scene),
+GameState::GameState(int w, int h, Scene *&scene, QMainWindow *parent)
+    : QGraphicsScene(parent), window(parent), w(w), h(h),
       selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)),
       rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr) {
   assert(window);
-  assert(scene);
   assert(selector);
+
+  scene = new Scene(w, h, *this, parent);
+  this->scene = scene;
 
   scene->addItem(selector);
   selector->setPos(L / 2, L / 2);
   scene->installEventFilter(this);
 
-  groundMap_.resize(TILES_X);
-  for (auto &col : groundMap_) {
-    col.resize(TILES_Y);
-  }
-
-  // debug
-  groundMap_[0][0] = new MineFactory(ROUND, RED);
-
-  deviceMap_.resize(TILES_X);
-  for (auto &col : deviceMap_) {
-    col.resize(TILES_Y);
-  }
-
-  portMap_.resize(TILES_X);
-  for (auto &col : portMap_) {
-    col.resize(TILES_Y, {});
-  }
-
-  // cpp grammer check
-  assert(portMap_[0][0][3] == nullptr);
+  navieInitMap(w, h);
 
   startTimer(1000 / FPS);
 }
 
+void GameState::save(QDataStream &out)
+{
+  out << w << h;
+
+  for (int i = 0; i < w; i ++) {
+    for (int j = 0; j < h; j ++) {
+      saveItemFactory(out, groundMap(i, j));
+    }
+  }
+
+  out << (int) devices.size();
+  for (auto &[p, desc]: devices) {
+    out << desc.p << desc.r;
+    saveDevice(out, p);
+  }
+}
+
 void GameState::pause(bool paused) { this->pause_ = paused; }
+
+GameState::GameState(QDataStream &in, Scene *&scene, QMainWindow *parent)
+  : selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)),
+    rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr)
+{
+  loadMap(in);
+  scene = new Scene(w, h, *this, parent);
+  this->scene = scene;
+
+  scene->addItem(selector);
+  selector->setPos(L / 2, L / 2);
+  scene->installEventFilter(this);
+
+  int nr_device;
+  in >> nr_device;
+  // sanity check
+  assert(nr_device >= 0);
+  assert(devices.empty());
+
+  for (int i = 0; i < nr_device; i ++) {
+    QPoint base;
+    rotate_t rotate;
+    in >> base >> rotate;
+    qDebug() << "Loading device at" << base << rotate;
+    Device *dev = loadDevice(in);
+
+    devices.insert({dev, {base, rotate}});
+  }
+
+  for (auto &[dev, desc]: devices) {
+    assert(dev);
+    installDevice(desc.p, desc.r, dev);
+    restoreDevice(dev, groundMap(desc.p));
+  }
+
+  startTimer(1000 / FPS);
+}
+
+void GameState::loadMap(QDataStream &in) {
+  in >> w >> h;
+
+  groundMap_.resize(w);
+  for (auto &col: groundMap_) {
+    col.resize(h);
+  }
+
+  deviceMap_.resize(w);
+  for (auto &col: deviceMap_) {
+    col.resize(h);
+  }
+
+  portMap_.resize(w);
+  for (auto &col: portMap_) {
+    col.resize(h);
+  }
+
+  for (int i = 0; i < w; i ++) {
+    for (int j = 0; j < h; j ++) {
+      groundMap_[i][j] = loadItemFactory(in);
+    }
+  }
+}
 
 bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
   assert(device);
@@ -152,7 +214,7 @@ void GameState::changeDevice(device_id_t id) {
 }
 
 bool GameState::inRange(int x, int y) {
-  return 0 <= x && x < TILES_X && 0 <= y && y < TILES_Y;
+  return 0 <= x && x < w && 0 <= y && y < h;
 }
 
 bool GameState::inRange(QPoint p) { return inRange(p.x(), p.y()); }
@@ -251,6 +313,35 @@ QList<PortHint> GameState::getPortHint(QPoint base, rotate_t rotate, const QList
   return hints;
 }
 
+void GameState::navieInitMap(int w, int h)
+{
+  this->w = w; this->h = h;
+
+  groundMap_.resize(w);
+  for (auto &col: groundMap_) {
+    col.resize(h);
+  }
+
+  deviceMap_.resize(w);
+  for (auto &col: deviceMap_) {
+    col.resize(h);
+  }
+
+  portMap_.resize(w);
+  for (auto &col: portMap_) {
+    col.resize(h);
+  }
+
+  QRandomGenerator gen;
+
+  for (int i = 0; i < w; i ++) {
+    for (int j = 0; j < h; j ++) {
+      int rand = rng.generate() % 1000;
+      groundMap_[i][j] = (rand < 200) ? randomItemFactory() : nullptr;
+    }
+  }
+}
+
 Selector::Selector(QObject *parent)
     : QObject(parent), x(0), y(0), path_({QPoint(0, 0)}) {}
 
@@ -339,6 +430,14 @@ void GameState::keyPressEvent(QKeyEvent *e) {
       break;
     }
   } else {
+    if (e->modifiers() == Qt::ControlModifier && e->key() == Qt::Key_S) {
+      QFile saveslot("save.bin");
+      saveslot.open(QIODevice::WriteOnly);
+      QDataStream savestream(&saveslot);
+      save(savestream);
+      saveslot.close();
+      return;
+    }
     if (e->key() == Key_Space) {
       selectorState = true;
       offset = QPoint(0, 0);
@@ -430,3 +529,40 @@ DeviceDescription::DeviceDescription(QPoint point, rotate_t rotate)
 
 DeviceDescription::DeviceDescription(int x, int y, rotate_t rotate)
     : p(QPoint(x, y)), r(rotate) {}
+
+
+Scene::Scene(int w, int h, GameState& game, QObject *parent)
+  : QGraphicsScene(parent), w(w), h(h), game(game)
+{
+
+}
+
+void Scene::drawBackground(QPainter *painter, const QRectF &rect)
+{
+  painter->save();
+  painter->setPen(Qt::gray);
+
+  qreal x1, y1, x2, y2;
+  rect.getCoords(&x1, &y1, &x2, &y2);
+
+  int sx, ex, sy, ey;
+  sx = floor(x1 / L) * L;
+  sy = floor(y1 / L) * L;
+  ex = ceil(x2 / L) * L;
+  ey = ceil(y2 / L) * L;
+
+  for (int x = sx; x < ex; x += L) {
+    for (int y = sy; y < ey; y += L) {
+      painter->save();
+      if (game.inRange(x / L, y / L)) {
+        if (auto f = game.groundMap(x/L, y/L)) {
+          painter->setBrush(f->color());
+        }
+      }
+      painter->drawRect(x, y, L, L);
+      painter->restore();
+    }
+  }
+
+  painter->restore();
+}

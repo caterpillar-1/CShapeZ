@@ -44,7 +44,9 @@ OutputPort::~OutputPort() {
 }
 
 bool OutputPort::send(const Item *item) {
-  assert(item);
+  if (!item) {
+    return false;
+  }
   if (buffer) {
     return false;
   }

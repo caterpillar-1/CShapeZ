@@ -1,8 +1,17 @@
 #include "mainwindow.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), scene(new QGraphicsScene(this)),
-      view(new QGraphicsView(scene, this)), game(new GameState(scene, this)) {
+    : QMainWindow(parent) {
+  QFile saveslot("save.bin");
+  saveslot.open(QIODevice::ReadOnly);
+  QDataStream savestream(&saveslot);
+
+  game = new GameState(savestream, scene, this);
+
+//  game = new GameState(25, 18, scene, this);
+
+  view = new QGraphicsView(scene, this);
+
   setCentralWidget(view);
 
   connect(game, &GameState::deviceChangeEvent, this, &MainWindow::deviceChangeEvent);
@@ -20,11 +29,11 @@ void MainWindow::addMenus() {
 
   {
     QAction *newGameAction = fileMenu->addAction("&New Game");
-    newGameAction->setShortcut(Qt::CTRL | Qt::Key_N);
+//    newGameAction->setShortcut(Qt::CTRL | Qt::Key_N);
     QAction *loadAction = fileMenu->addAction("&Load");
-    loadAction->setShortcut(Qt::CTRL | Qt::Key_L);
+//    loadAction->setShortcut(Qt::CTRL | Qt::Key_L);
     QAction *saveAction = fileMenu->addAction("&Save");
-    saveAction->setShortcut(Qt::CTRL | Qt::Key_S);
+//    saveAction->setShortcut(Qt::CTRL | Qt::Key_S);
     QAction *screenshotAction = fileMenu->addAction("Screenshot");
     QAction *quitAction = fileMenu->addAction("&Quit");
     quitAction->setShortcut(Qt::CTRL | Qt::Key_Q);
