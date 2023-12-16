@@ -96,6 +96,7 @@ const Mine *Mine::cutLower() const {
 
 void Mine::paint(QPainter *painter) const {
   painter->save();
+  painter->setPen(QPen(Qt::darkGray, L/16));
   painter->setBrush(QBrush(Qt::GlobalColor(trait)));
   QRectF bound(-R, -R, 2*R, 2*R);
   switch (type) {
@@ -283,3 +284,31 @@ QColor MineFactory::color()
   return Qt::GlobalColor(trait);
 }
 
+
+
+void TraitMine::paint(QPainter *painter) const
+{
+  painter->save();
+  QString file = ":/item/";
+  switch (trait) {
+  case BLACK:
+    file += "BLACK";
+    break;
+  case BLUE:
+    file += "BLUE";
+    break;
+  case RED:
+    file += "RED";
+    break;
+  }
+
+  qDebug() << file << trait;
+
+  QImage image(":/item/BLUE");
+  if (image.isNull()) {
+    Item::paint(painter);
+  } else {
+    painter->drawImage(QRectF(-R, -R, 2*R, 2*R), image);
+  }
+  painter->restore();
+}

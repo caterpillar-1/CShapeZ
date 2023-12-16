@@ -5,7 +5,7 @@
 #include "util.h"
 #include <QtWidgets>
 
-enum trait_t { BLACK = Qt::darkGray, RED = Qt::red, BLUE = Qt::blue };
+enum trait_t { BLACK = Qt::darkGray, RED = Qt::darkRed, BLUE = Qt::darkBlue };
 enum type_t { ROUND, SQUARE };
 enum shape_t { QUARTER = 1, HALF = 2, FULL = 4 };
 
@@ -32,6 +32,10 @@ public:
 
 private:
   const trait_t trait;
+
+  // Item interface
+public:
+  void paint(QPainter *painter) const override;
 };
 
 class Mine: public Item {

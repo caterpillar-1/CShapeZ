@@ -1,3 +1,3 @@
-extern const int L = 32, R = 12;
+extern const int L = 48, R = 16;
 
 extern const int FPS = 60;

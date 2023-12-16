@@ -11,6 +11,7 @@ GameState::GameState(int w, int h, Scene *&scene, QMainWindow *parent)
   this->scene = scene;
 
   scene->addItem(selector);
+  selector->setZValue(1000);
   selector->setPos(L / 2, L / 2);
   scene->installEventFilter(this);
 
@@ -47,6 +48,7 @@ GameState::GameState(QDataStream &in, Scene *&scene, QMainWindow *parent)
   this->scene = scene;
 
   scene->addItem(selector);
+  selector->setZValue(1000);
   selector->setPos(L / 2, L / 2);
   scene->installEventFilter(this);
 
@@ -556,7 +558,8 @@ void Scene::drawBackground(QPainter *painter, const QRectF &rect)
       painter->save();
       if (game.inRange(x / L, y / L)) {
         if (auto f = game.groundMap(x/L, y/L)) {
-          painter->setBrush(f->color());
+          QColor color = f->color();
+          painter->setBrush(QColor(f->color()).lighter());
         }
       }
       painter->drawRect(x, y, L, L);
@@ -564,5 +567,14 @@ void Scene::drawBackground(QPainter *painter, const QRectF &rect)
     }
   }
 
+  painter->restore();
+}
+
+
+void Scene::drawItems(QPainter *painter, int numItems, QGraphicsItem *items[], const QStyleOptionGraphicsItem options[], QWidget *widget)
+{
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing);
+  QGraphicsScene::drawItems(painter, numItems, items, options, widget);
   painter->restore();
 }

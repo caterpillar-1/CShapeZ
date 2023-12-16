@@ -1,0 +1,31 @@
+<RCC>
+    <qresource prefix="/device">
+        <file alias="belt_left">assets/images/device/belt_left.png</file>
+        <file alias="belt_right">assets/images/device/belt_right.png</file>
+        <file alias="belt_pass">assets/images/device/belt_top.png</file>
+        <file alias="cutter">assets/images/device/cutter.png</file>
+        <file alias="center">assets/images/device/hub.png</file>
+        <file alias="miner">assets/images/device/miner.png</file>
+        <file alias="mixer">assets/images/device/painter.png</file>
+        <file alias="rotater">assets/images/device/rotater.png</file>
+        <file alias="trash">assets/images/device/trash.png</file>
+    </qresource>
+    <qresource prefix="/device_icon">
+        <file alias="belt">assets/images/device_icon/belt.png</file>
+        <file alias="cutter">assets/images/device_icon/cutter.png</file>
+        <file alias="miner">assets/images/device_icon/miner.png</file>
+        <file alias="mixer">assets/images/device_icon/mixer.png</file>
+        <file alias="rotater">assets/images/device_icon/rotater.png</file>
+        <file alias="trash">assets/images/device_icon/trash.png</file>
+    </qresource>
+    <qresource prefix="/item">
+        <file alias="BLUE">assets/images/item/blue.png</file>
+        <file alias="CYAN">assets/images/item/cyan.png</file>
+        <file alias="GREEN">assets/images/item/green.png</file>
+        <file alias="PURPLE">assets/images/item/purple.png</file>
+        <file alias="RED">assets/images/item/red.png</file>
+        <file alias="BLACK">assets/images/item/uncolored.png</file>
+        <file alias="WHITE">assets/images/item/white.png</file>
+        <file alias="YELLOW">assets/images/item/yellow.png</file>
+    </qresource>
+</RCC>

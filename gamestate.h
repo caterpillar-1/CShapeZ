@@ -46,6 +46,10 @@ protected:
 private:
   const int w, h;
   GameState &game;
+
+  // QGraphicsScene interface
+protected:
+  void drawItems(QPainter *painter, int numItems, QGraphicsItem *items[], const QStyleOptionGraphicsItem options[], QWidget *widget) override;
 };
 
 

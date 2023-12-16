@@ -93,10 +93,8 @@ void Miner::restore(ItemFactory *f)
 void Miner::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
-  painter->setBrush(QBrush(Qt::green));
-  static const QPoint points[3] = {
-      {-L / 2, -L / 2}, {-L / 2, L / 2}, {L / 3, 0}};
-  painter->drawPolygon(points, 3);
+  static const QImage image(":/device/miner");
+  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
   painter->restore();
 }
 
@@ -201,10 +199,11 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     int x = blocks()[i].x(), y = blocks()[i].y();
     painter->translate(x * L, y * L);
     painter->rotate(-direction[i]*90);
-    painter->save();
-    painter->setBrush(QBrush(Qt::gray));
-    painter->drawPolygon(points, 4);
-    painter->restore();
+    static const QImage imageL(":/device/belt_left"), imageP(":/device/belt_pass"), imageR(":/device/belt_right");
+    painter->drawImage(QRect(-L / 2, -L / 2, L, L),
+                       (turn[i] == TURN_LEFT)    ? imageL
+                       : (turn[i] == TURN_RIGHT) ? imageR
+                                                 : imageP);
     if (i == blocks().size() - 1) {
       if (out.getBuffer()) {
         out.getBuffer()->paint(painter);
@@ -277,8 +276,8 @@ void Trash::save(QDataStream &out)
 void Trash::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
-  painter->drawRect(-L / 2, -L / 2, L, L);
-  painter->drawText(QPoint(-L / 2, 0), "Trash");
+  static const QImage image(":/device/trash");
+  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
   painter->restore();
 }
 
@@ -475,8 +474,8 @@ void Cutter::save(QDataStream &out)
 void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                    QWidget *widget) {
   painter->save();
-  painter->drawRect(-L / 2, -L / 2, L, 2 * L);
-  painter->drawText(QPoint(-L / 2, 0), "Cutter");
+  static const QImage image(":/device/cutter");
+  painter->drawImage(QRect(-L/2, -L/2, L, 2*L), image);
   painter->restore();
 }
 
@@ -530,8 +529,8 @@ void Rotator::save(QDataStream &out)
 void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                     QWidget *widget) {
   painter->save();
-  painter->drawRect(-L / 2, -L / 2, L, L);
-  painter->drawText(QPoint(-L / 2, 0), "Rotator");
+  static const QImage image(":/device/rotater");
+  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
   painter->restore();
 }
 
@@ -581,8 +580,8 @@ void Mixer::save(QDataStream &out)
 void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
-  painter->drawRect(-L / 2, -L / 2, 2 * L, L);
-  painter->drawText(QPoint(-L / 2, 0), "Mixer");
+  static const QImage image(":/device/mixer");
+  painter->drawImage(QRect(-L/2, -L/2, 2*L, L), image);
   painter->restore();
 }
 

@@ -23,6 +23,7 @@ set(PROJECT_SOURCES
   item.h item.cpp
   util.h util.cpp
   port.h port.cpp
+  resources.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
