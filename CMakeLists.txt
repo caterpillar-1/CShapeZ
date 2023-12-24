@@ -23,6 +23,8 @@ set(PROJECT_SOURCES
   item.h item.cpp
   util.h util.cpp
   port.h port.cpp
+  launcher.h launcher.cpp
+  goalmanager.h goalmanager.cpp
   resources.qrc
 )
 

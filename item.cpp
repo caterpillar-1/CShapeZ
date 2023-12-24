@@ -1,10 +1,10 @@
 #include "item.h"
 
-static int getInt(QDataStream &in) {
-  int x;
-  in >> x;
-  return x;
-}
+//static int getInt(QDataStream &in) {
+//  int x;
+//  in >> x;
+//  return x;
+//}
 
 Item::Item() {}
 
@@ -240,7 +240,7 @@ ItemFactory *randomItemFactory()
     qDebug() << "CREATE MINEFACTORY";
     trait_t trait;
     type_t type;
-    trait = trait_t(rng.generate() % 3);
+    trait = BLACK;
     type = type_t(rng.generate() % 2);
     return new MineFactory(type, trait);
   }
@@ -302,13 +302,18 @@ void TraitMine::paint(QPainter *painter) const
     break;
   }
 
-  qDebug() << file << trait;
+//  qDebug() << file << trait;
 
-  QImage image(":/item/BLUE");
+  QImage image(file);
   if (image.isNull()) {
     Item::paint(painter);
   } else {
     painter->drawImage(QRectF(-R, -R, 2*R, 2*R), image);
   }
   painter->restore();
+}
+
+const Mine *getMine(type_t type, shape_t shape, rotate_t rotate, trait_t trait)
+{
+  return new Mine(type, shape, rotate, trait);
 }

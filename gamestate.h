@@ -3,10 +3,11 @@
 
 #include "device.h"
 #include "item.h"
-#include <map>
+#include "goalmanager.h"
 #include <QtWidgets>
+#include <map>
 
-class Selector: public QObject, public QGraphicsItem {
+class Selector : public QObject, public QGraphicsItem {
   Q_OBJECT
 public:
   explicit Selector(QObject *parent = nullptr);
@@ -17,7 +18,8 @@ public:
   // QGraphicsItem interface
   QRectF boundingRect() const override;
   QPainterPath shape() const override;
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
 
 private:
   int x, y;
@@ -34,10 +36,10 @@ struct DeviceDescription {
 
 class GameState;
 
-class Scene: public QGraphicsScene {
+class Scene : public QGraphicsScene {
   Q_OBJECT
 public:
-  explicit Scene(int w, int h, GameState& game, QObject *parent = nullptr);
+  explicit Scene(int w, int h, GameState &game, QObject *parent = nullptr);
 
   // QGraphicsScene interface
 protected:
@@ -49,19 +51,21 @@ private:
 
   // QGraphicsScene interface
 protected:
-  void drawItems(QPainter *painter, int numItems, QGraphicsItem *items[], const QStyleOptionGraphicsItem options[], QWidget *widget) override;
+  void drawItems(QPainter *painter, int numItems, QGraphicsItem *items[],
+                 const QStyleOptionGraphicsItem options[],
+                 QWidget *widget) override;
 };
 
-
-class GameState : public QGraphicsScene
-{
+class GameState : public QGraphicsScene {
   Q_OBJECT
 public:
-  explicit GameState(int w, int h, Scene *&scene, QMainWindow *parent = nullptr);
+  explicit GameState(int w, int h, Scene *&scene,
+                     QMainWindow *parent = nullptr);
   void pause(bool paused);
 
   // serialize
-  explicit GameState(QDataStream &in, Scene *&scene, QMainWindow *parent = nullptr);
+  explicit GameState(QDataStream &in, Scene *&scene,
+                     QMainWindow *parent = nullptr);
   void save(QDataStream &out);
 
   // QObject interface
@@ -74,6 +78,7 @@ public slots:
 
 signals:
   void deviceChangeEvent(device_id_t id);
+  void saveEvent();
 
 private:
   // interfaces for self
@@ -82,7 +87,6 @@ private:
   void removeDevice(int x, int y);
   void removeDevice(QPoint p);
   void changeDevice(device_id_t id);
-
 
 private: // helper functions
   bool inRange(int x, int y);
@@ -97,7 +101,8 @@ private: // helper functions
   Port *otherPort(QPoint p, rotate_t r);
   void moveSelector(rotate_t d);
   void shiftSelector(rotate_t d);
-  QList<PortHint> getPortHint(QPoint base, rotate_t rotate, const QList<QPoint> &blocks);
+  QList<PortHint> getPortHint(QPoint base, rotate_t rotate,
+                              const QList<QPoint> &blocks);
   void navieInitMap(int w, int h);
   void loadMap(QDataStream &in);
 
@@ -128,7 +133,8 @@ private: // states
   DeviceFactory *deviceFactory;
 
   /* game stage */
-
+  Center *center;
+  GoalManager *goalManager;
 };
 
 #endif // GAMESTATE_H

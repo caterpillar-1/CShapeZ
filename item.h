@@ -113,4 +113,6 @@ ItemFactory *randomItemFactory();
 void saveItemFactory(QDataStream &out, ItemFactory *f);
 ItemFactory *loadItemFactory(QDataStream &in);
 
+const Mine *getMine(type_t type, shape_t shape, rotate_t rotate, trait_t trait);
+
 #endif // ITEM_H

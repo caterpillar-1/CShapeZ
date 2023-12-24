@@ -8,7 +8,7 @@ class MainWindow : public QMainWindow
 {
   Q_OBJECT
 public:
-  explicit MainWindow(QWidget *parent = nullptr);
+  explicit MainWindow(bool newGame, QString filename, QWidget *parent = nullptr);
   ~MainWindow();
 
 private:
@@ -17,14 +17,15 @@ private:
 
 public slots:
   void deviceChangeEvent(device_id_t id);
+  void saveEvent();
 
 private:
+  QString filename;
   GameState *game;
 
   Scene *scene;
   QGraphicsView *view;
-  QList<QAction *> deviceButtons;
-
+  QList<QPushButton *> deviceButtons;
 
 };
 

@@ -1,21 +1,23 @@
 #include "device.h"
 #include <set>
+#include <string>
 
-Device::Device(int speed, const QList<QPoint> &blocks) : blocks_(blocks) {
+Device::Device(const QList<QPoint> &blocks) : blocks_(blocks) {
   assert(!blocks.empty());
-  setSpeed(speed);
 }
 
-void Device::save(QDataStream &out)
-{
-  qDebug() << "Saveing base:" << speed << frameCount << blocks_;
-  out << speed << frameCount << blocks_;
-}
+void Device::save(QDataStream &out) { out << frameCount << blocks_; }
 
 const QList<QPoint> &Device::blocks() const { return blocks_; }
 
 void Device::advance(int phase) {
-  if (frameCount >= speed) {
+  int period;
+  qreal realSpeed = speed() * ratio();
+  if (realSpeed <= 0) {
+    return;
+  }
+  period = FPS / realSpeed;
+  if (frameCount >= period) {
     next();
     frameCount = 0;
   } else {
@@ -23,16 +25,8 @@ void Device::advance(int phase) {
   }
 }
 
-void Device::setSpeed(int speed) {
-  // sanity check, bound: [1/FPS, 10) s
-  assert(speed >= 1 && speed < 10 * FPS);
-  this->speed = speed;
-}
-
-Device::Device(QDataStream &in)
-{
-  in >> speed >> frameCount >> blocks_;
-  setSpeed(speed);
+Device::Device(QDataStream &in) {
+  in >> frameCount >> blocks_;
   assert(blocks_.size() >= 1);
 }
 
@@ -77,24 +71,19 @@ void Device::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
   painter->restore();
 }
 
-Miner::Miner(ItemFactory *factory, int speed)
-  : Device(speed), factory(factory) {}
+Miner::Miner(ItemFactory *factory) : Device(), factory(factory) {}
 
-void Miner::save(QDataStream &out)
-{
-  Device::save(out);
-}
+qreal Miner::ratio_ = 1;
 
-void Miner::restore(ItemFactory *f)
-{
-  factory = f;
-}
+void Miner::save(QDataStream &out) { Device::save(out); }
+
+void Miner::restore(ItemFactory *f) { factory = f; }
 
 void Miner::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
   static const QImage image(":/device/miner");
-  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
+  painter->drawImage(QRect(-L / 2, -L / 2, L, L), image);
   painter->restore();
 }
 
@@ -104,11 +93,7 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Miner::ports() {
   return ret;
 }
 
-Miner::Miner(QDataStream &in)
-  : Device(in)
-{
-
-}
+Miner::Miner(QDataStream &in) : Device(in) {}
 
 void Miner::next() {
   if (!factory)
@@ -120,16 +105,17 @@ void Miner::next() {
 }
 
 Belt::Belt(const QList<QPoint> &blocks, rotate_t inDirection,
-           rotate_t outDirection, int speed)
-    : Device(speed, blocks), inDirection(inDirection), outDirection(outDirection) {
-  buffer.resize(blocks.size() - 1, nullptr);
-  direction.resize(blocks.size());
-  turn.resize(blocks.size());
+           rotate_t outDirection)
+    : Device(blocks), inDirection(inDirection), outDirection(outDirection) {
+  length = blocks.size();
+  buffer.resize(length - 1, nullptr);
+  direction.resize(length);
+  turn.resize(length);
 
   direction.back() = outDirection;
-  for (int i = blocks.size() - 2; i >= 0; i --) {
-    QPoint p = blocks[i], np = blocks[i+1];
-    for (int d = 0; d < 4; d ++) {
+  for (int i = length - 2; i >= 0; i--) {
+    QPoint p = blocks[i], np = blocks[i + 1];
+    for (int d = 0; d < 4; d++) {
       if (p + QPoint(dx[d], dy[d]) == np) {
         direction[i] = rotate_t(d);
         break;
@@ -147,10 +133,10 @@ Belt::Belt(const QList<QPoint> &blocks, rotate_t inDirection,
     assert(false);
   }
 
-  for (int i = 1; i < blocks.size(); i ++) {
-    QPoint pp = blocks[i-1], p = blocks[i];
+  for (int i = 1; i < length; i++) {
+    QPoint pp = blocks[i - 1], p = blocks[i];
     rotate_t inD;
-    for (int d = 0; d < 4; d ++) {
+    for (int d = 0; d < 4; d++) {
       if (pp + dp[d] == p) {
         inD = rotate_t(d);
         break;
@@ -169,18 +155,18 @@ Belt::Belt(const QList<QPoint> &blocks, rotate_t inDirection,
   }
 }
 
-void Belt::save(QDataStream &out)
-{
+qreal Belt::ratio_ = 1;
+
+void Belt::save(QDataStream &out) {
   Device::save(out);
   out << inDirection << outDirection;
 
-  int n = blocks().size();
-  out << n;
+  out << length;
 
-  for (int i = 0; i < n; i ++) {
+  for (int i = 0; i < length; i++) {
     out << direction[i];
   }
-  for (int i = 0; i < n; i ++) {
+  for (int i = 0; i < length; i++) {
     out << turn[i];
   }
 }
@@ -198,8 +184,9 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     painter->save();
     int x = blocks()[i].x(), y = blocks()[i].y();
     painter->translate(x * L, y * L);
-    painter->rotate(-direction[i]*90);
-    static const QImage imageL(":/device/belt_left"), imageP(":/device/belt_pass"), imageR(":/device/belt_right");
+    painter->rotate(-direction[i] * 90);
+    static const QImage imageL(":/device/belt_left"),
+        imageP(":/device/belt_pass"), imageR(":/device/belt_right");
     painter->drawImage(QRect(-L / 2, -L / 2, L, L),
                        (turn[i] == TURN_LEFT)    ? imageL
                        : (turn[i] == TURN_RIGHT) ? imageR
@@ -221,26 +208,23 @@ void Belt::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
 
 const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Belt::ports() {
   return {{&in, {blocks().front(), rotate_t((inDirection + 2) % 4)}},
-    {&out, {blocks().back(), outDirection}}};
+          {&out, {blocks().back(), outDirection}}};
 }
 
-Belt::Belt(QDataStream &in)
-  : Device(in)
-{
+Belt::Belt(QDataStream &in) : Device(in) {
   in >> inDirection >> outDirection;
 
-  int n;
-  in >> n;
-  assert(n > 0);
-  direction.resize(n);
-  turn.resize(n);
-  for (auto &x: direction) {
+  in >> length;
+  assert(length > 0);
+  direction.resize(length);
+  turn.resize(length);
+  for (auto &x : direction) {
     in >> x;
   }
-  for (auto &x: turn) {
+  for (auto &x : turn) {
     in >> x;
   }
-  buffer.resize(n - 1);
+  buffer.resize(length - 1);
 }
 
 void Belt::next() {
@@ -249,9 +233,9 @@ void Belt::next() {
       out.send(buffer.back());
       buffer.back() = nullptr;
     }
-    for (int i = buffer.size() - 2; i >= 0; i --) {
-      if (buffer[i+1] == nullptr) {
-        buffer[i+1] = buffer[i];
+    for (int i = buffer.size() - 2; i >= 0; i--) {
+      if (buffer[i + 1] == nullptr) {
+        buffer[i + 1] = buffer[i];
         buffer[i] = nullptr;
       }
     }
@@ -266,18 +250,21 @@ void Belt::next() {
   update();
 }
 
-Trash::Trash(int speed) : Device(speed) {}
+qreal Belt::speed() { return BELT_SPEED; }
 
-void Trash::save(QDataStream &out)
-{
-  Device::save(out);
-}
+qreal Belt::ratio() { return ratio_; }
+
+Trash::Trash() : Device() {}
+
+qreal Trash::ratio_;
+
+void Trash::save(QDataStream &out) { Device::save(out); }
 
 void Trash::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
   static const QImage image(":/device/trash");
-  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
+  painter->drawImage(boundingRect(), image);
   painter->restore();
 }
 
@@ -289,11 +276,7 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Trash::ports() {
   return ret;
 }
 
-Trash::Trash(QDataStream &in)
-  : Device(in)
-{
-
-}
+Trash::Trash(QDataStream &in) : Device(in) {}
 
 void Trash::next() {
   for (auto &e : in) {
@@ -305,58 +288,120 @@ void Trash::next() {
   }
 }
 
-Center::Center(int speed)
-    : Device(speed, []() {
+qreal Trash::speed()
+{
+  return TRASH_SPEED;
+}
+
+qreal Trash::ratio()
+{
+  return ratio_;
+}
+
+Center::Center(int size)
+    : Device([=]() {
         QList<QPoint> ret;
-        for (int i = 0; i < 4; i++) {
-          for (int j = 0; j < 4; j++) {
+        for (int i = 0; i < size; i++) {
+          for (int j = 0; j < size; j++) {
             ret.push_back(QPoint(i, j));
           }
         }
         return ret;
-      }()) {}
+      }()),
+      size(size) {
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{size - 1, i}, R0}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{0, i}, R180}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{i, 0}, R90}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{i, size - 1}, R270}});
+  }
+}
+
+Center::~Center() {
+  for (auto &[device, desc] : in) {
+    delete device;
+  }
+}
 
 void Center::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                    QWidget *widget) {
   painter->save();
-  painter->translate(-L / 2, -L / 2);
-  painter->drawRect(boundingRect());
-  painter->drawText(boundingRect(), "Center");
+  static const QImage image(":/device/center");
+  painter->drawImage(boundingRect(), image);
+  if (icon)
+    painter->drawPicture(0, 2 * L, *icon);
+  using std::to_string;
+  painter->drawText(L / 4, 0, L / 2, L * 2 / 3, Qt::AlignCenter,
+                    to_string(problemSet).c_str());
+  painter->drawText(2 * L, 0, to_string(task).c_str());
+  painter->drawText(
+      0, 0, 4 * L, 4 * L, Qt::AlignCenter,
+      (to_string(received) + " / " + to_string(required)).c_str());
   painter->restore();
 }
 
 const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Center::ports() {
   QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> ret;
-  for (auto &p : in) {
-    ret.push_back({&p.first, p.second});
+  for (auto &[dev, desc] : in) {
+    ret.push_back({dev, desc});
   }
   return ret;
 }
 
+Center::Center(QDataStream &sin) : Device(sin) {
+  sin >> size;
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{size - 1, i}, R0}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{0, i}, R180}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{i, 0}, R90}});
+  }
+  for (int i = 0; i < size; i++) {
+    in.push_back({new InputPort(), {{i, size - 1}, R270}});
+  }
+}
+
 void Center::next() {
   for (auto &e : in) {
-    const Item *item = e.first.receive();
+    const Item *item = e.first->receive();
     if (item) {
+      qDebug() << "Center received item!";
+      emit receiveItem(item);
       delete item;
     }
   }
 }
 
-DeviceFactory::DeviceFactory(int speed) : speed_(speed) {}
+qreal Center::speed()
+{
+  return CENTER_SPEED;
+}
 
-int DeviceFactory::speed() { return speed_; }
+qreal Center::ratio()
+{
+  return ratio_;
+}
 
-void DeviceFactory::setSpeed(int speed) { speed_ = speed; }
+DeviceFactory::DeviceFactory() {}
 
-MinerFactory::MinerFactory(int speed) : DeviceFactory(speed) {}
+MinerFactory::MinerFactory() {}
 
 Miner *MinerFactory::createDevice(const QList<QPoint> &blocks,
                                   const QList<PortHint> &hints,
                                   ItemFactory *itemFactory) {
-  return new Miner(itemFactory, speed());
+  return new Miner(itemFactory);
 }
 
-BeltFactory::BeltFactory(int speed) : DeviceFactory(speed) {}
+BeltFactory::BeltFactory() {}
 
 bool operator<(const QPoint &a, const QPoint &b) {
   if (a.x() != b.x())
@@ -415,7 +460,7 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
       }
     }
 
-    for (int d = 0; d < 4; d ++) {
+    for (int d = 0; d < 4; d++) {
       const QPoint &a = blocks[0], &b = blocks[1];
       if (a + dp[d] == b) {
         if (inDirection == (d + 2) % 4) {
@@ -425,7 +470,7 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
       }
     }
 
-    for (int d = 0; d < 4; d ++) {
+    for (int d = 0; d < 4; d++) {
       const QPoint &a = blocks[blocks.size() - 2], &b = blocks.back();
       if (a + dp[d] == b) {
         if (outDirection == (d + 2) % 4) {
@@ -439,12 +484,12 @@ Belt *BeltFactory::createDevice(const QList<QPoint> &blocks,
   return new Belt(blocks, inDirection, outDirection);
 }
 
-TrashFactory::TrashFactory(int speed) : DeviceFactory(speed) {}
+TrashFactory::TrashFactory() {}
 
 Trash *TrashFactory::createDevice(const QList<QPoint> &blocks,
                                   const QList<PortHint> &hints,
                                   ItemFactory *itemFactory) {
-  return new Trash(speed());
+  return new Trash();
 }
 
 static DeviceFactory *globalDeviceFactories[] = {new MinerFactory(),
@@ -463,10 +508,11 @@ DeviceFactory *getDeviceFactory(device_id_t id) {
   return globalDeviceFactories[id];
 }
 
-Cutter::Cutter(int speed) : Device(speed, {{0, 0}, {0, 1}}), stall(false) {}
+Cutter::Cutter() : Device({{0, 0}, {0, 1}}), stall(false) {}
 
-void Cutter::save(QDataStream &out)
-{
+qreal Cutter::ratio_ = 1;
+
+void Cutter::save(QDataStream &out) {
   Device::save(out);
   out << stall;
 }
@@ -475,7 +521,7 @@ void Cutter::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                    QWidget *widget) {
   painter->save();
   static const QImage image(":/device/cutter");
-  painter->drawImage(QRect(-L/2, -L/2, L, 2*L), image);
+  painter->drawImage(boundingRect(), image);
   painter->restore();
 }
 
@@ -487,11 +533,7 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Cutter::ports() {
   };
 }
 
-Cutter::Cutter(QDataStream &in)
-  : Device(in)
-{
-  in >> stall;
-}
+Cutter::Cutter(QDataStream &in) : Device(in) { in >> stall; }
 
 void Cutter::next() {
   if (stall)
@@ -511,26 +553,35 @@ void Cutter::next() {
   }
 }
 
-CutterFactory::CutterFactory(int speed) : DeviceFactory(speed) {}
+qreal Cutter::speed()
+{
+  return CUTTER_SPEED;
+}
+
+qreal Cutter::ratio()
+{
+  return ratio_;
+}
+
+CutterFactory::CutterFactory() {}
 
 Cutter *CutterFactory::createDevice(const QList<QPoint> &blocks,
                                     const QList<PortHint> &hints,
                                     ItemFactory *itemFactory) {
-  return new Cutter(speed());
+  return new Cutter();
 }
 
-Rotator::Rotator(int speed) : Device(speed) {}
+Rotator::Rotator() {}
 
-void Rotator::save(QDataStream &out)
-{
-  Device::save(out);
-}
+qreal Rotator::ratio_ = 1;
+
+void Rotator::save(QDataStream &out) { Device::save(out); }
 
 void Rotator::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                     QWidget *widget) {
   painter->save();
   static const QImage image(":/device/rotater");
-  painter->drawImage(QRect(-L/2, -L/2, L, L), image);
+  painter->drawImage(boundingRect(), image);
   painter->restore();
 }
 
@@ -541,10 +592,7 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Rotator::ports() {
   };
 }
 
-Rotator::Rotator(QDataStream &in)
-  : Device(in)
-{
-}
+Rotator::Rotator(QDataStream &in) : Device(in) {}
 
 void Rotator::next() {
   if (out.ready()) {
@@ -561,18 +609,23 @@ void Rotator::next() {
   }
 }
 
-RotatorFactory::RotatorFactory(int speed) : DeviceFactory(speed) {}
+qreal Rotator::speed() { return ROTATOR_SPEED; }
+
+qreal Rotator::ratio() { return ratio_; }
+
+RotatorFactory::RotatorFactory() {}
 
 Rotator *RotatorFactory::createDevice(const QList<QPoint> &blocks,
                                       const QList<PortHint> &hints,
                                       ItemFactory *itemFactory) {
-  return new Rotator(speed());
+  return new Rotator();
 }
 
-Mixer::Mixer(int speed) : Device(speed, {{0, 0}, {1, 0}}), stall(false) {}
+Mixer::Mixer() : Device({{0, 0}, {1, 0}}), stall(false) {}
 
-void Mixer::save(QDataStream &out)
-{
+qreal Mixer::ratio_ = 1;
+
+void Mixer::save(QDataStream &out) {
   Device::save(out);
   out << stall;
 }
@@ -581,7 +634,7 @@ void Mixer::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                   QWidget *widget) {
   painter->save();
   static const QImage image(":/device/mixer");
-  painter->drawImage(QRect(-L/2, -L/2, 2*L, L), image);
+  painter->drawImage(QRect(-L / 2, -L / 2, 2 * L, L), image);
   painter->restore();
 }
 
@@ -593,11 +646,7 @@ const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>> Mixer::ports() {
   };
 }
 
-Mixer::Mixer(QDataStream &in)
-  : Device(in)
-{
-  in >> stall;
-}
+Mixer::Mixer(QDataStream &in) : Device(in) { in >> stall; }
 
 void Mixer::next() {
   if (!(inMine.ready() && inTrait.ready() && out.ready()))
@@ -618,12 +667,16 @@ void Mixer::next() {
   delete itemTrait;
 }
 
-MixerFactory::MixerFactory(int speed) : DeviceFactory(speed) {}
+qreal Mixer::speed() { return MIXER_SPEED; }
+
+qreal Mixer::ratio() { return ratio_; }
+
+MixerFactory::MixerFactory() {}
 
 Mixer *MixerFactory::createDevice(const QList<QPoint> &blocks,
                                   const QList<PortHint> &hints,
                                   ItemFactory *itemFactory) {
-  return new Mixer(speed());
+  return new Mixer();
 }
 
 // serialize
@@ -644,10 +697,11 @@ void saveDevice(QDataStream &out, Device *dev) {
     out << QChar('R');
   } else if (dynamic_cast<Trash *>(dev)) {
     out << QChar('T');
+  } else if (dynamic_cast<Center *>(dev)) {
+    out << QChar('A');
   } else {
     assert(false);
   }
-  // its GameState's responsibility to handle Center
   dev->save(out);
 }
 
@@ -670,15 +724,77 @@ Device *loadDevice(QDataStream &in) {
     return new Trash(in);
   } else if (id == 'R') {
     return new Rotator(in);
+  } else if (id == 'A') {
+    return new Center(in);
   } else {
     assert(false);
   }
-  // its GameState's responsibility to handle Center
 }
 
-void restoreDevice(Device *dev, ItemFactory *f)
-{
+void resetDeviceRatio() {
+  Miner::ratio_ = 1;
+  Belt::ratio_ = 1;
+  Cutter::ratio_ = 1;
+  Rotator::ratio_ = 1;
+  Cutter::ratio_ = 1;
+  Trash::ratio_ = 1;
+
+}
+void setDeviceRatio(device_id_t id, qreal ratio) {
+  assert(0.5 <= ratio && ratio <= 4);
+  switch (id) {
+  case MINER:
+    Miner::ratio_ = ratio;
+    break;
+  case BELT:
+    Belt::ratio_ = ratio;
+    break;
+  case CUTTER:
+    Cutter::ratio_ = ratio;
+    break;
+  case ROTATOR:
+    Rotator::ratio_ = ratio;
+    break;
+  case MIXER:
+    Mixer::ratio_ = ratio;
+    break;
+  case TRASH:
+    Trash::ratio_ = ratio;
+    break;
+  default:
+    break;
+  }
+}
+
+void restoreDevice(Device *dev, ItemFactory *f) {
   if (auto miner = dynamic_cast<Miner *>(dev)) {
     miner->restore(f);
   }
+}
+
+void Center::save(QDataStream &out) {
+  Device::save(out);
+  out << size;
+}
+
+void Center::updateGoal(int problemSet, int task, int received, int required,
+                        const QPicture *icon) {
+  this->problemSet = problemSet;
+  this->task = task;
+  this->received = received;
+  this->required = required;
+  this->icon = icon;
+  update();
+}
+
+qreal Miner::speed() { return MINER_SPEED; }
+
+qreal Miner::ratio() { return ratio_; }
+
+void saveDeviceRatio(QDataStream &out) {
+  out << Miner::ratio_ << Belt::ratio_ << Cutter::ratio_ << Rotator::ratio_ << Mixer::ratio_ << Trash::ratio_;
+}
+
+void loadDeviceRatio(QDataStream &in) {
+  in >> Miner::ratio_ >> Belt::ratio_ >> Cutter::ratio_ >> Rotator::ratio_ >> Mixer::ratio_ >> Trash::ratio_;
 }
