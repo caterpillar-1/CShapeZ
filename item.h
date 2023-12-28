@@ -5,7 +5,7 @@
 #include "util.h"
 #include <QtWidgets>
 
-enum trait_t { BLACK = Qt::darkGray, RED = Qt::darkRed, BLUE = Qt::darkBlue };
+enum trait_t { BLACK = Qt::gray, RED = Qt::darkRed, BLUE = Qt::darkBlue };
 enum type_t { ROUND, SQUARE };
 enum shape_t { QUARTER = 1, HALF = 2, FULL = 4 };
 
@@ -13,6 +13,7 @@ class Item
 {
 public:
   Item();
+  ~Item();
 
   virtual void paint(QPainter *painter) const;
 
@@ -43,6 +44,7 @@ public:
   explicit Mine(type_t type, shape_t shape, rotate_t rotate, trait_t trait);
   explicit Mine(const Mine& o);
   bool operator==(const Mine& o) const;
+  int value() const;
 
   const Mine *setTrait(trait_t trait) const;
   const Mine *rotateR() const;

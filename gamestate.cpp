@@ -1,9 +1,10 @@
 #include "gamestate.h"
 
-GameState::GameState(int w, int h, Scene *&scene, QMainWindow *parent)
-    : QGraphicsScene(parent), window(parent), w(w), h(h),
+GameState::GameState(int w, int h, Scene *&scene, GoalManager *&goal, QMainWindow *parent)
+    : QWidget(parent), window(parent), w(w), h(h), money(0), enhance(0), deviceId(DEV_NONE),
       selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)),
-      rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr) {
+      rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr),
+      moneyRatio(1), itemRatio(0.2), nextW(w), nextH(h) {
   assert(window);
   assert(selector);
   assert(w >= 8 && h >= 8);
@@ -16,7 +17,7 @@ GameState::GameState(int w, int h, Scene *&scene, QMainWindow *parent)
   selector->setPos(L / 2, L / 2);
   scene->installEventFilter(this);
 
-  navieInitMap(w, h);
+  naiveInitMap(w, h);
 
   center = new Center(4);
   QPoint centerBase = {rng.bounded(w - 4), rng.bounded(h - 4)};
@@ -25,13 +26,7 @@ GameState::GameState(int w, int h, Scene *&scene, QMainWindow *parent)
   resetDeviceRatio();
 
   goalManager = new GoalManager();
-
-  connect(center, &Center::receiveItem, goalManager, &GoalManager::receiveItem);
-  connect(goalManager, &GoalManager::updateGoal, center, &Center::updateGoal);
-
-  goalManager->init();
-
-  startTimer(1000 / FPS);
+  goal = goalManager;
 }
 
 void GameState::save(QDataStream &out) {
@@ -51,12 +46,15 @@ void GameState::save(QDataStream &out) {
   saveDeviceRatio(out);
 
   goalManager->save(out);
+  out << money << enhance;
+
+  out << moneyRatio << itemRatio << nextW << nextH;
 }
 
 void GameState::pause(bool paused) { this->pause_ = paused; }
 
-GameState::GameState(QDataStream &in, Scene *&scene, QMainWindow *parent)
-    : selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)),
+GameState::GameState(QDataStream &in, Scene *&scene, GoalManager *&goal, QMainWindow *parent)
+    : QWidget(parent), window(parent), selector(new Selector(this)), base(QPoint(0, 0)), offset(QPoint(0, 0)), deviceId(DEV_NONE),
       rotate(R0), selectorState(false), pause_(false), deviceFactory(nullptr),
       center(nullptr) {
   loadMap(in);
@@ -97,13 +95,30 @@ GameState::GameState(QDataStream &in, Scene *&scene, QMainWindow *parent)
   assert(center);
 
   goalManager = new GoalManager(in);
+  goal = goalManager;
 
+  in >> money >> enhance;
+
+  in >> moneyRatio >> itemRatio >> nextW >> nextH;
+}
+
+void GameState::init()
+{
   connect(center, &Center::receiveItem, goalManager, &GoalManager::receiveItem);
   connect(goalManager, &GoalManager::updateGoal, center, &Center::updateGoal);
+  connect(goalManager, &GoalManager::enhanceChange, this, &GameState::enhanceChange);
+  connect(goalManager, &GoalManager::moneyChange, this, &GameState::moneyChange);
+  connect(goalManager, &GoalManager::mapConstructEvent, this, &GameState::mapConstructEvent);
 
   goalManager->init();
 
-  startTimer(1000 / FPS);
+  emit moneyChangeEvent(money);
+  emit enhanceChangeEvent(enhance);
+  for (int i = 0; i < DEV_NONE; i ++) {
+    emit deviceRatioChangeEvent(device_id_t(i), getDeviceRatio(device_id_t(i)));
+  }
+
+  timerId = startTimer(1000 / FPS);
 }
 
 void GameState::loadMap(QDataStream &in) {
@@ -129,6 +144,30 @@ void GameState::loadMap(QDataStream &in) {
       groundMap_[i][j] = loadItemFactory(in);
     }
   }
+}
+
+bool GameState::enhanceDevice(device_id_t id)
+{
+  if (enhance <= 0) {
+    return false;
+  }
+  qreal ratio = getDeviceRatio(id), nr;
+  if (abs(ratio - 1) < EPS) {
+    nr = 1.5;
+  } else if (abs(ratio - 1.5) < EPS) {
+    nr = 2;
+  } else if (abs(ratio - 2) < EPS) {
+    nr = 2.5;
+  } else if (abs(ratio - 2.5) < EPS) {
+    nr = 3;
+  } else {
+    return false;
+  }
+  setDeviceRatio(id, nr);
+  enhance --;
+  emit enhanceChangeEvent(enhance);
+  emit deviceRatioChangeEvent(id, nr);
+  return true;
 }
 
 bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
@@ -188,9 +227,9 @@ bool GameState::installDevice(QPoint base, rotate_t rotate, Device *device) {
 
 void GameState::removeDevice(Device *device) {
   assert(devices.find(device) != devices.end());
-  if (dynamic_cast<Center *>(device)) {
-    return; // center is not removable
-  }
+//  if (dynamic_cast<Center *>(device)) {
+//    return; // center is not removable
+//  }
   const auto &[base, rotate] = devices.at(device);
   auto blocks = device->blocks();
   auto portEntries = device->ports();
@@ -224,14 +263,17 @@ void GameState::removeDevice(Device *device) {
   }
 
   // remove from gui
+  // device is automatically deleted by Qt
   scene->removeItem(device);
 
   devices.erase(device);
-  delete device;
 }
 
 void GameState::removeDevice(int x, int y) {
   Device *d = deviceMap(x, y);
+  if (dynamic_cast<Center *>(d)) {
+    return;
+  }
   if (d) {
     removeDevice(d);
   }
@@ -243,9 +285,11 @@ void GameState::changeDevice(device_id_t id) {
   DeviceFactory *nf = getDeviceFactory(id);
   if (nf == deviceFactory) {
     deviceFactory = nullptr;
+    deviceId = DEV_NONE;
     emit deviceChangeEvent(DEV_NONE);
   } else {
     deviceFactory = nf;
+    deviceId = id;
     emit deviceChangeEvent(id);
   }
 }
@@ -350,23 +394,31 @@ QList<PortHint> GameState::getPortHint(QPoint base, rotate_t rotate,
   return hints;
 }
 
-void GameState::navieInitMap(int w, int h) {
+void GameState::naiveInitMap(int w, int h) {
   this->w = w;
   this->h = h;
 
+  for (auto &col: groundMap_) {
+    for (auto &block: col) {
+      delete block;
+    }
+  }
+  groundMap_.resize(0);
   groundMap_.resize(w);
   for (auto &col : groundMap_) {
     col.resize(h);
   }
 
+  deviceMap_.resize(0);
   deviceMap_.resize(w);
   for (auto &col : deviceMap_) {
-    col.resize(h);
+    col.resize(h, nullptr);
   }
 
+  portMap_.resize(0);
   portMap_.resize(w);
   for (auto &col : portMap_) {
-    col.resize(h);
+    col.resize(h, std::array<Port *, 4>());
   }
 
   QRandomGenerator gen;
@@ -441,7 +493,10 @@ void Selector::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
   painter->restore();
 }
 
-void GameState::timerEvent(QTimerEvent *) { scene->advance(); }
+void GameState::timerEvent(QTimerEvent *e) {
+  if (!pause_ && e->timerId() == timerId)
+    scene->advance();
+}
 
 void GameState::keyPressEvent(QKeyEvent *e) {
   using namespace Qt;
@@ -467,8 +522,21 @@ void GameState::keyPressEvent(QKeyEvent *e) {
       break;
     }
   } else {
-    if (e->modifiers() == Qt::ControlModifier && e->key() == Qt::Key_S) {
-      emit saveEvent();
+    if (e->modifiers() == Qt::ControlModifier) {
+      switch (e->key()) {
+      case Qt::Key_S:
+        emit saveEvent();
+        break;
+      case Qt::Key_Equal:
+        emit zoomIn();
+        break;
+      case Qt::Key_Minus:
+        emit zoomOut();
+        break;
+      case Qt::Key_0:
+        emit zoomReset();
+        break;
+      }
       return;
     }
     if (e->key() == Key_Space) {
@@ -518,6 +586,15 @@ void GameState::keyPressEvent(QKeyEvent *e) {
     case Key_D:
       removeDevice(base);
       break;
+    case Key_Equal:
+      enhanceDevice(deviceId);
+      break;
+    case Key_S:
+      shopOpenEvent();
+      break;
+    case Key_C:
+      center->ensureVisible();
+      break;
     }
   }
 }
@@ -546,6 +623,60 @@ void GameState::keyReleaseEvent(QKeyEvent *e) {
   }
 }
 
+void GameState::enhanceChange()
+{
+  enhance ++;
+  emit enhanceChangeEvent(enhance);
+}
+
+void GameState::moneyChange(int delta)
+{
+  money += delta * moneyRatio;
+  emit moneyChangeEvent(money);
+}
+
+void GameState::shopOpenEvent()
+{
+  Shop shop(money, moneyRatio, itemRatio, nextW, nextH, window);
+  shop.exec();
+  emit moneyChangeEvent(money);
+}
+
+void GameState::mapConstructEvent()
+{
+  pause_ = true;
+  killTimer(timerId);
+  std::vector<Device *> devList;
+  for (auto &[dev, desc]: devices) {
+    devList.push_back(dev);
+  }
+
+  for (auto &dev: devList) {
+    if (dynamic_cast<Center *>(dev)) {
+      continue;
+    }
+    removeDevice(dev);
+  }
+  scene->removeItem(center);
+  devices.erase(center);
+
+  w = nextW; h = nextH;
+  naiveInitMap(w, h);
+
+  QPoint centerBase = {rng.bounded(w - 4), rng.bounded(h - 4)};
+  rotate_t centerRotate = R0;
+  installDevice(centerBase, centerRotate, center);
+  resetDeviceRatio();
+  for (int i = 0; i < DEV_NONE; i ++) {
+    emit deviceRatioChangeEvent(device_id_t(i), getDeviceRatio(device_id_t(i)));
+  }
+  assert(scene->items().size() == 2);
+
+  scene->update(0, 0, w * L, h * L);
+  pause_ = false;
+  timerId = startTimer(1000/FPS);
+}
+
 bool GameState::eventFilter(QObject *object, QEvent *event) {
   if (event->type() == QEvent::KeyPress) {
     keyPressEvent(static_cast<QKeyEvent *>(event));
@@ -565,7 +696,7 @@ DeviceDescription::DeviceDescription(int x, int y, rotate_t rotate)
     : p(QPoint(x, y)), r(rotate) {}
 
 Scene::Scene(int w, int h, GameState &game, QObject *parent)
-    : QGraphicsScene(parent), w(w), h(h), game(game) {}
+  : QGraphicsScene(parent), w(w), h(h), game(game) {}
 
 void Scene::drawBackground(QPainter *painter, const QRectF &rect) {
   painter->save();
@@ -586,6 +717,9 @@ void Scene::drawBackground(QPainter *painter, const QRectF &rect) {
       if (game.inRange(x / L, y / L)) {
         if (auto f = game.groundMap(x / L, y / L)) {
           QColor color = f->color();
+          if (color == Qt::gray) {
+            color = Qt::darkGray;
+          }
           painter->setBrush(QColor(f->color()).lighter());
         }
       }

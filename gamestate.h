@@ -4,6 +4,7 @@
 #include "device.h"
 #include "item.h"
 #include "goalmanager.h"
+#include "shop.h"
 #include <QtWidgets>
 #include <map>
 
@@ -56,16 +57,17 @@ protected:
                  QWidget *widget) override;
 };
 
-class GameState : public QGraphicsScene {
+class GameState : public QWidget {
   Q_OBJECT
 public:
-  explicit GameState(int w, int h, Scene *&scene,
+  explicit GameState(int w, int h, Scene *&scene, GoalManager *&goal,
                      QMainWindow *parent = nullptr);
   void pause(bool paused);
 
   // serialize
-  explicit GameState(QDataStream &in, Scene *&scene,
+  explicit GameState(QDataStream &in, Scene *&scene, GoalManager *&goal,
                      QMainWindow *parent = nullptr);
+  void init();
   void save(QDataStream &out);
 
   // QObject interface
@@ -75,10 +77,20 @@ protected:
 public slots:
   void keyPressEvent(QKeyEvent *e) override;
   void keyReleaseEvent(QKeyEvent *e) override;
+  void enhanceChange();
+  void moneyChange(int delta);
+  void shopOpenEvent();
+  void mapConstructEvent();
 
 signals:
   void deviceChangeEvent(device_id_t id);
+  void deviceRatioChangeEvent(device_id_t id, qreal ratio);
   void saveEvent();
+  void enhanceChangeEvent(int enhance);
+  void moneyChangeEvent(int money);
+  void zoomIn();
+  void zoomOut();
+  void zoomReset();
 
 private:
   // interfaces for self
@@ -103,8 +115,9 @@ private: // helper functions
   void shiftSelector(rotate_t d);
   QList<PortHint> getPortHint(QPoint base, rotate_t rotate,
                               const QList<QPoint> &blocks);
-  void navieInitMap(int w, int h);
+  void naiveInitMap(int w, int h);
   void loadMap(QDataStream &in);
+  bool enhanceDevice(device_id_t id);
 
 private: // states
   int w, h;
@@ -129,12 +142,19 @@ private: // states
   std::map<Device *, DeviceDescription> devices;
 
   /* game control */
+  int timerId;
   bool pause_;
+  device_id_t deviceId;
   DeviceFactory *deviceFactory;
 
   /* game stage */
   Center *center;
   GoalManager *goalManager;
+  int money;
+  int enhance;
+  qreal moneyRatio;
+  qreal itemRatio;
+  int nextW, nextH;
 };
 
 #endif // GAMESTATE_H

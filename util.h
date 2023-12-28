@@ -14,4 +14,6 @@ extern const QPoint dp[];
 
 extern QRandomGenerator &rng;
 
+extern const qreal EPS;
+
 #endif // UTIL_H

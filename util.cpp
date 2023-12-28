@@ -12,3 +12,5 @@ rotate_t rotateR(rotate_t d) {
 }
 
 extern QRandomGenerator &rng = *QRandomGenerator::global();
+
+const qreal EPS = 1E-6;

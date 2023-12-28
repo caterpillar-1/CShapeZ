@@ -10,6 +10,7 @@ class Device : public QObject, public QGraphicsItem {
   Q_OBJECT
 public:
   explicit Device(const QList<QPoint> &blocks = QList<QPoint>({QPoint(0, 0)}));
+  ~Device();
   const QList<QPoint> &blocks() const;
   virtual const QList<std::pair<Port *, std::pair<QPoint, rotate_t>>>
   ports() = 0;
@@ -51,6 +52,7 @@ DeviceFactory *getDeviceFactory(device_id_t id);
 
 class Miner : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -90,6 +92,7 @@ public:
 
 class Belt : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -125,7 +128,7 @@ private:
   std::vector<rotate_t> direction;
   std::vector<turn_t> turn;
   int length;
-  std::vector<const Item *> buffer;
+  QQueue<QPair<const Item *, int>> buffer;
 };
 
 class BeltFactory : public DeviceFactory {
@@ -139,6 +142,7 @@ public:
 
 class Cutter : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -180,6 +184,7 @@ public:
 
 class Rotator : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -221,6 +226,7 @@ public:
 
 class Mixer : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -262,6 +268,7 @@ public:
 
 class Trash : public Device {
   Q_OBJECT
+  friend qreal getDeviceRatio(device_id_t id);
   friend void setDeviceRatio(device_id_t id, qreal ratio);
   friend void resetDeviceRatio();
 public:
@@ -335,8 +342,10 @@ private:
   int size;
   int problemSet, task, received, required;
   const QPicture *icon;
-  QList<std::pair<InputPort *, std::pair<QPoint, rotate_t>>> in;
+  QList<std::pair<InputPort, std::pair<QPoint, rotate_t>>> in;
 };
+
+const QString getDeviceName(device_id_t id);
 
 // serialize
 void saveDevice(QDataStream &out, Device *dev);
@@ -347,6 +356,7 @@ void loadDeviceRatio(QDataStream &in);
 // timing
 void resetDeviceRatio();
 void setDeviceRatio(device_id_t id, qreal ratio);
+qreal getDeviceRatio(device_id_t id);
 
 void saveCenter(QDataStream &out, Center *center);
 Center *loadCenter(QDataStream &in);

@@ -30,6 +30,7 @@ void GoalManager::receiveItem(const Item *item) {
     if (*dut == *ref) {
       advance();
     }
+    emit moneyChange(dut->value());
   }
 }
 
@@ -41,11 +42,13 @@ void GoalManager::advance() {
   if (received == required) {
     received = 0;
     task++;
+    emit enhanceChange();
     sync = true;
   }
 
   if (task == levels[problemSet].size()) {
     task = 0;
+    emit mapConstructEvent();
     problemSet++;
   }
 

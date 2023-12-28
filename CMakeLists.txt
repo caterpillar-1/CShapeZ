@@ -25,6 +25,7 @@ set(PROJECT_SOURCES
   port.h port.cpp
   launcher.h launcher.cpp
   goalmanager.h goalmanager.cpp
+  shop.h shop.cpp
   resources.qrc
 )
 

@@ -19,6 +19,9 @@ public slots:
 
 signals:
   void updateGoal(int problemSet, int task, int received, int required, const QPicture *icon);
+  void enhanceChange();
+  void moneyChange(int delta);
+  void mapConstructEvent();
 
 private:
   void advance(); // Having received a correct item. What's next?

@@ -8,6 +8,11 @@
 
 Item::Item() {}
 
+Item::~Item()
+{
+
+}
+
 void Item::paint(QPainter *painter) const {
   qWarning() << "default item image is painted.";
   painter->save();
@@ -32,6 +37,32 @@ Mine::Mine(const Mine &o)
 
 bool Mine::operator==(const Mine &o) const {
   return type == o.type && shape == o.shape && trait == o.trait;
+}
+
+int Mine::value() const
+{
+  int sum = 0;
+  switch (shape) {
+  case FULL:
+    sum = 4;
+    break;
+  case HALF:
+    sum = 2;
+    break;
+  case QUARTER:
+    sum = 1;
+    break;
+  default:
+    assert(false);
+  }
+
+  switch (trait) {
+  case BLACK:
+    break;
+  default:
+    sum *= 2;
+  }
+  return sum;
 }
 
 const Mine *Mine::setTrait(trait_t trait) const {
@@ -99,12 +130,22 @@ void Mine::paint(QPainter *painter) const {
   painter->setPen(QPen(Qt::darkGray, L/16));
   painter->setBrush(QBrush(Qt::GlobalColor(trait)));
   QRectF bound(-R, -R, 2*R, 2*R);
+  painter->rotate(-rotate * 90);
   switch (type) {
   case ROUND:
-    painter->drawPie(bound, rotate * 90 * 16, shape * 90 * 16);
+//    painter->drawPie(bound, rotate * 90 * 16, shape * 90 * 16);
+    switch (shape) {
+    case FULL:
+      painter->drawPie(bound, 180*16, 90*16);
+      painter->drawPie(bound, 270*16, 90*16);
+    case HALF: // fall through
+      painter->drawPie(bound, 90*16, 90*16);
+    case QUARTER: // fall through
+      painter->drawPie(bound, 0, 90*16);
+    }
+
     break;
   case SQUARE:
-    painter->rotate(-rotate * 90);
     switch (shape) {
     case FULL:
       painter->drawRect(QRectF(-R, 0, R, R));
@@ -114,6 +155,7 @@ void Mine::paint(QPainter *painter) const {
     case QUARTER: // fall through
       painter->drawRect(QRectF(0, -R, R, R));
     }
+    break;
   }
   painter->restore();
 }
