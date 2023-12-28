@@ -425,8 +425,8 @@ void GameState::naiveInitMap(int w, int h) {
 
   for (int i = 0; i < w; i++) {
     for (int j = 0; j < h; j++) {
-      int rand = rng.generate() % 1000;
-      groundMap_[i][j] = (rand < 200) ? randomItemFactory() : nullptr;
+      qreal rand = rng.generateDouble();
+      groundMap_[i][j] = (rand < itemRatio) ? randomItemFactory() : nullptr;
     }
   }
 }

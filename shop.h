@@ -19,6 +19,10 @@ private:
   qreal &moneyRatio;
   qreal &itemRatio;
   int &nextW, &nextH;
+
+  QLabel *dMoneyRatio;
+  QLabel *dItemRatio;
+  QLabel *dNextMap;
 };
 
 #endif // SHOP_H
