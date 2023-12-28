@@ -14,7 +14,7 @@ bool InputPort::ready() const
 }
 
 const Item *InputPort::receive() {
-  if (otherPort) {
+  if (otherPort && otherPort->valid()) {
     return otherPort->transmit();
   } else {
     return nullptr;
