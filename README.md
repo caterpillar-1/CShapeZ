@@ -10,29 +10,29 @@ CShapeZ 是一个工业流水线模拟器，参照原版 [ShapeZ](https://github
 
 ### 编辑地图
 
-<key>H</key>, <key>J</key>, <key>K</key>, <key>L</key>: 上下左右移动;
+<kbd>H</kbd>, <kbd>J</kbd>, <kbd>K</kbd>, <kbd>L</kbd>: 上下左右移动;
 
-<key>Space</key>: 按下开始选择，释放完成选择并放置当前设备;
+<kbd>Space</kbd>: 按下开始选择，释放完成选择并放置当前设备;
 
-<key>1</key> ~ <key>6</key>: 选择下一个设备;
+<kbd>1</kbd> ~ <kbd>6</kbd>: 选择下一个设备;
 
-<key>R</key>: 调整下一个放置的设备的朝向;
+<kbd>R</kbd>: 调整下一个放置的设备的朝向;
 
 ### 地图移动缩放
 
-<key>C</key>: 地图平移到中心;
+<kbd>C</kbd>: 地图平移到中心;
 
-<key>Ctrl</key><key>+</key>, <key>Ctrl</key><key>-</key>: 放大/缩小地图;
+<kbd>Ctrl</kbd><kbd>+</kbd>, <kbd>Ctrl</kbd><kbd>-</kbd>: 放大/缩小地图;
 
-<key>Ctrl</key><key>0</key>: 重置缩放;
+<kbd>Ctrl</kbd><kbd>0</kbd>: 重置缩放;
 
 ### 局部强化
 
-<key>+</key>: 消耗一次局部强化机会，强化当前设备效率;
+<kbd>+</kbd>: 消耗一次局部强化机会，强化当前设备效率;
 
 ### 全局强化
 
-<key>S</key>: 显示商店;
+<kbd>S</kbd>: 显示商店;
 
 ## 致谢
 
